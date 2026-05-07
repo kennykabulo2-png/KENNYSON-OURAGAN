@@ -23,7 +23,7 @@ LIVRES = [
     {"titre": "Manuel du citoyen congolais", "auteur": "Société civile", "categorie": "Droits citoyens"},
 ]
 
-# ==================== TEMPLATE UNIFORME ====================
+# ==================== TEMPLATE BASE (style Cloud Shell + améliorations) ====================
 BASE_TEMPLATE = '''
 <!DOCTYPE html>
 <html lang="fr">
@@ -33,7 +33,9 @@ BASE_TEMPLATE = '''
     <title>OYEBI · {title}</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -78,6 +80,20 @@ BASE_TEMPLATE = '''
             margin-left: 1.5rem;
             font-weight: 500;
             transition: 0.3s;
+            position: relative;
+        }}
+        .nav-links a::after {{
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: #FACC15;
+            transition: width 0.3s ease;
+        }}
+        .nav-links a:hover::after {{
+            width: 100%;
         }}
         .nav-links a:hover {{ color: #FACC15; }}
         .container {{
@@ -95,6 +111,7 @@ BASE_TEMPLATE = '''
             text-align: center;
             margin-bottom: 2rem;
             border: 1px solid rgba(255,255,255,0.1);
+            animation: fadeInUp 0.6s ease-out forwards;
         }}
         .hero h1 {{
             font-size: 2.5rem;
@@ -104,6 +121,7 @@ BASE_TEMPLATE = '''
             background-clip: text;
             color: transparent;
             margin-bottom: 1rem;
+            text-shadow: 0 0 20px rgba(0,133,202,0.3);
         }}
         .typed-text {{
             font-size: 1.2rem;
@@ -119,9 +137,15 @@ BASE_TEMPLATE = '''
             border-radius: 1rem;
             padding: 1.5rem;
             border: 1px solid rgba(255,255,255,0.1);
-            transition: 0.3s;
+            transition: all 0.4s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+            animation: fadeInUp 0.6s ease-out forwards;
         }}
-        .card-glass:hover {{ transform: translateY(-5px); border-color: #FACC15; }}
+        .card-glass:hover {{
+            transform: translateY(-8px);
+            border-color: #FACC15;
+            background: rgba(255,255,255,0.07);
+            box-shadow: 0 20px 30px -15px rgba(0,0,0,0.3);
+        }}
         .kpi-value {{ font-size: 2rem; font-weight: 700; color: #FACC15; }}
         table {{ width: 100%; border-collapse: collapse; }}
         th, td {{ padding: 0.6rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1); }}
@@ -138,9 +162,31 @@ BASE_TEMPLATE = '''
             font-size: 0.8rem;
             color: #64748B;
         }}
+        @keyframes fadeInUp {{
+            from {{ opacity: 0; transform: translateY(30px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
         @media (max-width: 768px) {{
-            .nav-links a {{ margin-left: 0.8rem; }}
-            .hero h1 {{ font-size: 1.8rem; }}
+            .navbar {{
+                flex-direction: column;
+                gap: 1rem;
+                padding: 1rem;
+            }}
+            .nav-links a {{
+                margin: 0 0.8rem;
+            }}
+            .hero h1 {{
+                font-size: 1.8rem;
+            }}
+            .hero {{
+                padding: 2rem 1rem;
+            }}
+            .card-glass {{
+                padding: 1.2rem;
+            }}
+            .container {{
+                padding: 6rem 1rem 2rem;
+            }}
         }}
     </style>
 </head>
@@ -164,6 +210,7 @@ BASE_TEMPLATE = '''
     <p>OYEBI · Gouvernance transparente · Kinshasa, RDC</p>
 </footer>
 <script>
+    AOS.init({{ duration: 800, once: true, offset: 100 }});
     particlesJS("particles-js", {{
         particles: {{
             number: {{ value: 80, density: {{ enable: true, value_area: 800 }} }},
@@ -242,10 +289,10 @@ DASHBOARD = '''
         agents.forEach(a => { agentsHtml += `<tr><td><strong>${a.nom}</strong><br><small>${a.grade}</small></td><td style="text-align:right">${(a.salaire/1e6).toFixed(2)}M FC</td></tr>`; });
         agentsHtml += '</table>';
         document.getElementById('agentsTable').innerHTML = agentsHtml;
-        let societesHtml = '<tr><thead><tr><th>Société</th><th>Impôt dû</th><th>Payé</th><th>Statut</th> </thead><tbody>';
+        let societesHtml = '<table><thead><tr><th>Société</th><th>Impôt dû</th><th>Payé</th><th>Statut</th> </thead><tbody>';
         societes.forEach(s => {
             let badge = s.statut === 'Alerte' ? 'badge-alert' : (s.statut === 'Conforme' ? 'badge-conforme' : 'badge-modere');
-            societesHtml += `<tr><td>${s.nom}</td><td>${s.impot_du}M$</td><td>${s.impot_paye}M$</td><td><span class="${badge}">${s.statut}</span></td>`;
+            societesHtml += `<tr><td><strong>${s.nom}</strong></td><td>${s.impot_du}M$</td><td>${s.impot_paye}M$</td><td><span class="${badge}">${s.statut}</span></td>`;
         });
         societesHtml += '</tbody></table>';
         document.getElementById('societesTable').innerHTML = societesHtml;
@@ -282,8 +329,7 @@ INSIGHTS = '''
             <div class="card-glass"><h3>BTP</h3><div class="kpi-value">${b}M$</div><div>${Math.round(b/total*100)}%</div></div>
         `;
         new Chart(document.getElementById('donut'), {
-            type: 'doughnut',
-            data: { labels: ['Mines','Télécoms','BTP','Commerce'], datasets: [{ data: societes.map(s=>s.impot_du-s.impot_paye), backgroundColor: ['#0085CA','#FACC15','#EF4444','#10B981'] }] }
+            type: 'doughnut', data: { labels: ['Mines','Télécoms','BTP','Commerce'], datasets: [{ data: societes.map(s=>s.impot_du-s.impot_paye), backgroundColor: ['#0085CA','#FACC15','#EF4444','#10B981'] }] }
         });
     }
     loadInsights();
@@ -340,40 +386,12 @@ def bibliotheque():
 
 # ==================== PAGE À PROPOS ====================
 APROPOS = '''
-<div class="hero">
-    <h1>À propos d'OYEBI</h1>
-</div>
-
-<div class="card-glass">
-    <h2>📌 Notre Vision</h2>
-    <p>OYEBI est né d'une conviction profonde : <strong>la transparence est le fondement d'une gouvernance juste et efficace</strong>. Notre vision est de faire de la République Démocratique du Congo un modèle de gouvernance ouverte, où chaque citoyen peut accéder aux données publiques et comprendre comment son pays est géré.</p>
-</div>
-
-<div class="card-glass">
-    <h2>🎯 Notre Mission</h2>
-    <p>Offrir une plateforme accessible, fiable et moderne qui centralise les données essentielles de l'administration congolaise : situation des agents publics, traçabilité des recettes fiscales, suivi des objectifs nationaux, et ressources documentaires citoyennes.</p>
-</div>
-
-<div class="card-glass">
-    <h2>💎 Nos Valeurs</h2>
-    <div class="grid-3">
-        <div class="card-glass"><i class="fas fa-eye" style="font-size:2rem; color:#FACC15;"></i><h3>Transparence</h3><p>Les données sont ouvertes, vérifiables et accessibles à tous.</p></div>
-        <div class="card-glass"><i class="fas fa-shield-alt" style="font-size:2rem; color:#FACC15;"></i><h3>Intégrité</h3><p>Nous ne modifions ni ne censurons aucune donnée.</p></div>
-        <div class="card-glass"><i class="fas fa-chart-line" style="font-size:2rem; color:#FACC15;"></i><h3>Innovation</h3><p>Des outils modernes pour une administration plus efficace.</p></div>
-    </div>
-</div>
-
-<div class="card-glass">
-    <h2>🌍 Pourquoi OYEBI ?</h2>
-    <p>Le nom <strong>OYEBI</strong> signifie "savoir" ou "connaître" en lingala. Parce qu'un citoyen informé est un citoyen qui peut agir. OYEBI est un outil au service du peuple congolais, pour une démocratie plus participative et une administration plus responsable.</p>
-</div>
-
-<div class="card-glass" style="text-align: center;">
-    <h2>👨‍💻 Concepteur</h2>
-    <p><strong>Kenny Kabulo Matanda</strong><br>
-    Développeur passionné par la Civic Tech et la gouvernance transparente.<br>
-    <i class="fas fa-map-marker-alt"></i> Kinshasa, République Démocratique du Congo</p>
-</div>
+<div class="hero"><h1>À propos d'OYEBI</h1></div>
+<div class="card-glass"><h2>📌 Notre Vision</h2><p>OYEBI est né d'une conviction profonde : <strong>la transparence est le fondement d'une gouvernance juste et efficace</strong>. Notre vision est de faire de la République Démocratique du Congo un modèle de gouvernance ouverte, où chaque citoyen peut accéder aux données publiques et comprendre comment son pays est géré.</p></div>
+<div class="card-glass"><h2>🎯 Notre Mission</h2><p>Offrir une plateforme accessible, fiable et moderne qui centralise les données essentielles de l'administration congolaise : situation des agents publics, traçabilité des recettes fiscales, suivi des objectifs nationaux, et ressources documentaires citoyennes.</p></div>
+<div class="card-glass"><h2>💎 Nos Valeurs</h2><div class="grid-3"><div class="card-glass"><i class="fas fa-eye"></i><h3>Transparence</h3><p>Les données sont ouvertes, vérifiables et accessibles à tous.</p></div><div class="card-glass"><i class="fas fa-shield-alt"></i><h3>Intégrité</h3><p>Nous ne modifions ni ne censurons aucune donnée.</p></div><div class="card-glass"><i class="fas fa-chart-line"></i><h3>Innovation</h3><p>Des outils modernes pour une administration plus efficace.</p></div></div></div>
+<div class="card-glass"><h2>🌍 Pourquoi OYEBI ?</h2><p>Le nom <strong>OYEBI</strong> signifie "savoir" ou "connaître" en lingala. Parce qu'un citoyen informé est un citoyen qui peut agir. OYEBI est un outil au service du peuple congolais, pour une démocratie plus participative et une administration plus responsable.</p></div>
+<div class="card-glass" style="text-align: center;"><h2>👨‍💻 Concepteur</h2><p><strong>Kenny Kabulo Matanda</strong><br>Développeur passionné par la Civic Tech et la gouvernance transparente.<br><i class="fas fa-map-marker-alt"></i> Kinshasa, République Démocratique du Congo</p></div>
 '''
 
 @app.route('/apropos')

@@ -1,0 +1,28 @@
+services:
+  web:
+    build: .
+    container_name: oyebi_app
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=postgresql://oyebi:oyebi@db:5432/oyebi
+      - SECRET_KEY=monsecretpouroyebi2025
+    depends_on:
+      - db
+    volumes:
+      - ./app:/app/app
+
+  db:
+    image: postgres:15
+    container_name: oyebi_db
+    environment:
+      POSTGRES_USER: oyebi
+      POSTGRES_PASSWORD: oyebi
+      POSTGRES_DB: oyebi
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

@@ -1,9 +1,13 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, session, redirect, url_for
+from functools import wraps
 import json
 import logging
+import hashlib
+import secrets
 from datetime import datetime
 
 app = Flask(__name__)
+app.secret_key = 'oyebi_secret_key_2026'
 
 # ==================== LOGS ET GESTION DES ERREURS ====================
 logging.basicConfig(level=logging.INFO)
@@ -20,6 +24,65 @@ def page_not_found(e):
 @app.errorhandler(500)
 def internal_error(e):
     return "<h1>500 - Erreur interne</h1><p>Une erreur s'est produite. Veuillez réessayer plus tard.</p><a href='/'>Retour à l'accueil</a>", 500
+
+# ==================== AUTHENTIFICATION ====================
+users = {}
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('user'):
+            return redirect('/login')
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+    name = data.get('name')
+    
+    if email in users:
+        return jsonify({"error": "Email déjà utilisé"}), 400
+    
+    users[email] = {
+        "name": name,
+        "password": hash_password(password),
+        "email": email,
+        "created_at": datetime.now().isoformat()
+    }
+    return jsonify({"message": "Compte créé avec succès !"}), 201
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+    
+    user = users.get(email)
+    if not user or user['password'] != hash_password(password):
+        return jsonify({"error": "Email ou mot de passe incorrect"}), 401
+    
+    token = secrets.token_hex(32)
+    session['user'] = email
+    return jsonify({"token": token, "user": {"name": user['name'], "email": user['email']}}), 200
+
+@app.route('/api/logout', methods=['POST'])
+def logout():
+    session.pop('user', None)
+    return jsonify({"message": "Déconnecté"}), 200
+
+@app.route('/api/me')
+def me():
+    email = session.get('user')
+    if not email:
+        return jsonify({"error": "Non authentifié"}), 401
+    user = users.get(email)
+    return jsonify({"name": user['name'], "email": user['email']}), 200
 
 # ==================== DONNEES ====================
 AGENTS = [
@@ -40,22 +103,22 @@ LIVRES = [
         "titre": "Le prix de la corruption",
         "auteur": "M. Nkolo",
         "categorie": "Anti-corruption",
-        "resume": "Une analyse approfondie des mécanismes de la corruption en Afrique centrale, avec des études de cas en RDC. L'auteur démontre comment la corruption gangrène l'économie et propose des solutions concrètes pour la combattre.",
-        "contenu": "La corruption est un fléau qui touche tous les secteurs de la société congolaise. Dans cet ouvrage, M. Nkolo analyse les racines historiques et structurelles de ce phénomène. Il examine les mécanismes de détournement des fonds publics, les réseaux d'influence et propose un plan d'action pour restaurer l'intégrité dans l'administration. Un livre essentiel pour tout agent public soucieux de la transparence."
+        "resume": "Une analyse approfondie des mécanismes de la corruption en Afrique centrale, avec des études de cas en RDC.",
+        "contenu": "La corruption est un fléau qui touche tous les secteurs de la société congolaise. Dans cet ouvrage, M. Nkolo analyse les racines historiques et structurelles de ce phénomène."
     },
     {
         "titre": "Gestion des finances publiques",
         "auteur": "J. Tshibangu",
         "categorie": "Finances",
-        "resume": "Guide pratique pour comprendre et maîtriser les rouages des finances publiques en RDC. Budget, fiscalité, contrôle financier : tous les aspects sont abordés.",
-        "contenu": "Ce guide s'adresse aux agents publics et aux citoyens qui souhaitent comprendre comment l'argent public est géré. L'auteur explique le cycle budgétaire, les principes de la fiscalité congolaise, les mécanismes de contrôle financier et propose des outils pour améliorer la transparence budgétaire. Une référence indispensable pour tous ceux qui veulent participer à la bonne gouvernance."
+        "resume": "Guide pratique pour comprendre et maîtriser les rouages des finances publiques en RDC.",
+        "contenu": "Ce guide s'adresse aux agents publics et aux citoyens qui souhaitent comprendre comment l'argent public est géré."
     },
     {
         "titre": "Manuel du citoyen congolais",
         "auteur": "Société civile",
         "categorie": "Droits citoyens",
-        "resume": "Un guide complet des droits et devoirs des citoyens congolais, avec des explications sur la Constitution, les libertés fondamentales et les mécanismes de participation citoyenne.",
-        "contenu": "Ce manuel est un outil pédagogique qui explique de manière claire et accessible les droits et devoirs des citoyens congolais. Il aborde la Constitution, les libertés fondamentales, le droit de vote, la participation citoyenne, et les recours possibles en cas de violation des droits. Un ouvrage essentiel pour former des citoyens éclairés et engagés."
+        "resume": "Un guide complet des droits et devoirs des citoyens congolais.",
+        "contenu": "Ce manuel est un outil pédagogique qui explique de manière claire et accessible les droits et devoirs des citoyens congolais."
     }
 ]
 
@@ -385,6 +448,7 @@ BASE_TEMPLATE = '''
         <a href="/objectifs">Objectifs</a>
         <a href="/bibliotheque">Bibliothèque</a>
         <a href="/apropos">À propos</a>
+        <a href="/login" id="authLink">Connexion</a>
     </div>
 </nav>
 <div class="container">
@@ -425,6 +489,27 @@ BASE_TEMPLATE = '''
         setTimeout(type, 100);
     }}
     type();
+    
+    // Vérification de connexion pour le menu
+    const token = localStorage.getItem('token');
+    const authLink = document.getElementById('authLink');
+    if (token && authLink) {
+        fetch('/api/me', {{
+            headers: {{ 'Authorization': `Bearer ${{token}}` }}
+        }}).then(res => {{
+            if (res.ok) {{
+                authLink.innerHTML = '<i class="fas fa-user-circle"></i> Mon compte';
+                authLink.href = '/mon-compte';
+            }} else {{
+                localStorage.removeItem('token');
+                authLink.innerHTML = 'Connexion';
+                authLink.href = '/login';
+            }}
+        }}).catch(() => {{
+            authLink.innerHTML = 'Connexion';
+            authLink.href = '/login';
+        }});
+    }
 </script>
 </body>
 </html>
@@ -529,7 +614,7 @@ DASHBOARD = '''
             </tr>`;
         });
         document.getElementById('agentsTable').innerHTML = agentsHtml;
-        let societesHtml = '<tr><thead><tr><th>Société</th><th>Impôt dû</th><th>Payé</th><th>Statut</th> </thead><tbody>';
+        let societesHtml = '<table><thead><tr><th>Société</th><th>Impôt dû</th><th>Payé</th><th>Statut</th> </thead><tbody>';
         societes.forEach(s => {
             let badge = s.statut === 'Alerte' ? 'badge-alert' : (s.statut === 'Conforme' ? 'badge-conforme' : 'badge-modere');
             societesHtml += `<tr>
@@ -629,12 +714,11 @@ OBJECTIFS = '''
 def objectifs():
     return render_page("Objectifs", OBJECTIFS, '["Mesurez l\'avancement des objectifs 2025.", "Suivez les cibles de l\'administration.", "Atteignons ensemble nos ambitions nationales."]')
 
-# ==================== BIBLIOTHEQUE AVEC LECTURE POPUP ====================
+# ==================== BIBLIOTHEQUE ====================
 BIBLIOTHEQUE = '''
 <div class="hero"><h1><i class="fas fa-book-open"></i> Bibliothèque citoyenne</h1><p>Lectures pour renforcer la gouvernance</p></div>
 <div class="grid-3" id="booksGrid"></div>
 
-<!-- Modal pour lire le contenu -->
 <div id="bookModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:2000; justify-content:center; align-items:center;">
     <div style="background:#0A0F1E; border-radius:1rem; max-width:600px; width:90%; max-height:80vh; overflow-y:auto; padding:2rem; border:1px solid #FACC15;">
         <div style="text-align:right;">
@@ -644,7 +728,7 @@ BIBLIOTHEQUE = '''
         <p id="modalAuthor" style="color:#94A3B8; margin-bottom:1rem;"></p>
         <h3 style="color:#0085CA; margin-top:1rem;">Résumé</h3>
         <p id="modalResume" style="line-height:1.6;"></p>
-        <h3 style="color:#0085CA; margin-top:1rem;">Extrait / Contenu</h3>
+        <h3 style="color:#0085CA; margin-top:1rem;">Extrait</h3>
         <p id="modalContent" style="line-height:1.6;"></p>
     </div>
 </div>
@@ -664,66 +748,4 @@ BIBLIOTHEQUE = '''
                     <h3>${l.titre}</h3>
                     <p>${l.auteur}</p>
                     <small style="color:#94A3B8;">${l.categorie}</small>
-                    <p style="margin-top:0.8rem; font-size:0.85rem;">${l.resume.substring(0, 120)}...</p>
-                    <div style="margin-top:1rem;">
-                        <button style="background:#0085CA; color:white; border:none; border-radius:0.5rem; padding:0.3rem 0.8rem; cursor:pointer;">Lire l'extrait</button>
-                    </div>
-                </div>
-            `;
-        }
-        document.getElementById('booksGrid').innerHTML = html;
-    }
-
-    function openBookModal(index) {
-        const livre = livresData[index];
-        document.getElementById('modalTitle').innerText = livre.titre;
-        document.getElementById('modalAuthor').innerHTML = `<i class="fas fa-user"></i> ${livre.auteur} | <i class="fas fa-tag"></i> ${livre.categorie}`;
-        document.getElementById('modalResume').innerText = livre.resume;
-        document.getElementById('modalContent').innerText = livre.contenu;
-        document.getElementById('bookModal').style.display = 'flex';
-    }
-
-    function closeModal() {
-        document.getElementById('bookModal').style.display = 'none';
-    }
-
-    loadBooks();
-</script>
-'''
-
-@app.route('/bibliotheque')
-def bibliotheque():
-    return render_page("Bibliothèque", BIBLIOTHEQUE, '["Des livres pour comprendre la gouvernance.", "La connaissance au service de la transparence.", "Formez-vous pour mieux agir."]')
-
-# ==================== À PROPOS ====================
-APROPOS = '''
-<div class="hero"><h1><i class="fas fa-info-circle"></i> À propos d'OYEBI</h1></div>
-<div class="card-glass"><h2><i class="fas fa-bullseye"></i> Notre Vision</h2><p>OYEBI est né d'une conviction profonde : <strong>la transparence est le fondement d'une gouvernance juste et efficace</strong>. Notre vision est de faire de la République Démocratique du Congo un modèle de gouvernance ouverte.</p></div>
-<div class="card-glass"><h2><i class="fas fa-flag-checkered"></i> Notre Mission</h2><p>Offrir une plateforme accessible, fiable et moderne qui centralise les données essentielles de l'administration congolaise.</p></div>
-<div class="card-glass"><h2><i class="fas fa-gem"></i> Nos Valeurs</h2><div class="grid-3"><div class="card-glass"><i class="fas fa-eye"></i><h3>Transparence</h3></div><div class="card-glass"><i class="fas fa-shield-alt"></i><h3>Intégrité</h3></div><div class="card-glass"><i class="fas fa-chart-line"></i><h3>Innovation</h3></div></div></div>
-<div class="card-glass"><h2><i class="fas fa-globe-africa"></i> Pourquoi OYEBI ?</h2><p>Le nom <strong>OYEBI</strong> signifie "savoir" en lingala. Un citoyen informé est un citoyen qui peut agir.</p></div>
-<div class="card-glass" style="text-align: center;"><h2><i class="fas fa-laptop-code"></i> Concepteur</h2><p><strong>Kenny Kabulo Matanda</strong><br>Kinshasa, RDC</p></div>
-'''
-
-@app.route('/apropos')
-def apropos():
-    return render_page("À propos", APROPOS, '["Une vision pour un Congo transparent.", "La donnée au service du citoyen.", "Innovation et intégrité."]')
-
-# ==================== API ====================
-@app.route('/api/agents')
-def api_agents(): return jsonify(AGENTS)
-@app.route('/api/societes')
-def api_societes(): return jsonify(SOCIETES)
-@app.route('/api/livres')
-def api_livres(): return jsonify(LIVRES)
-@app.route('/api/stats')
-def api_stats():
-    return jsonify({
-        "nb_agents": len(AGENTS),
-        "nb_societes": len(SOCIETES),
-        "masse_salariale": sum(a['salaire'] for a in AGENTS),
-        "manque_fiscal": sum(s['impot_du'] - s['impot_paye'] for s in SOCIETES) * 1_000_000
-    })
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+                    <p style="margin-top:0.8rem; font-size:

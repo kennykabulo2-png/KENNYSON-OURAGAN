@@ -1,7 +1,25 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import json
+import logging
+from datetime import datetime
 
 app = Flask(__name__)
+
+# ==================== LOGS ET GESTION DES ERREURS ====================
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+@app.before_request
+def log_request_info():
+    logger.info(f"{datetime.now()} - {request.method} {request.path}")
+
+@app.errorhandler(404)
+def page_not_found(e):
+    return "<h1>404 - Page non trouvée</h1><p>La page que vous cherchez n'existe pas.</p><a href='/'>Retour à l'accueil</a>", 404
+
+@app.errorhandler(500)
+def internal_error(e):
+    return "<h1>500 - Erreur interne</h1><p>Une erreur s'est produite. Veuillez réessayer plus tard.</p><a href='/'>Retour à l'accueil</a>", 500
 
 # ==================== DONNEES ====================
 AGENTS = [
@@ -18,9 +36,27 @@ SOCIETES = [
 ]
 
 LIVRES = [
-    {"titre": "Le prix de la corruption", "auteur": "M. Nkolo", "categorie": "Anti-corruption"},
-    {"titre": "Gestion des finances publiques", "auteur": "J. Tshibangu", "categorie": "Finances"},
-    {"titre": "Manuel du citoyen congolais", "auteur": "Société civile", "categorie": "Droits citoyens"},
+    {
+        "titre": "Le prix de la corruption",
+        "auteur": "M. Nkolo",
+        "categorie": "Anti-corruption",
+        "resume": "Une analyse approfondie des mécanismes de la corruption en Afrique centrale, avec des études de cas en RDC. L'auteur démontre comment la corruption gangrène l'économie et propose des solutions concrètes pour la combattre.",
+        "contenu": "La corruption est un fléau qui touche tous les secteurs de la société congolaise. Dans cet ouvrage, M. Nkolo analyse les racines historiques et structurelles de ce phénomène. Il examine les mécanismes de détournement des fonds publics, les réseaux d'influence et propose un plan d'action pour restaurer l'intégrité dans l'administration. Un livre essentiel pour tout agent public soucieux de la transparence."
+    },
+    {
+        "titre": "Gestion des finances publiques",
+        "auteur": "J. Tshibangu",
+        "categorie": "Finances",
+        "resume": "Guide pratique pour comprendre et maîtriser les rouages des finances publiques en RDC. Budget, fiscalité, contrôle financier : tous les aspects sont abordés.",
+        "contenu": "Ce guide s'adresse aux agents publics et aux citoyens qui souhaitent comprendre comment l'argent public est géré. L'auteur explique le cycle budgétaire, les principes de la fiscalité congolaise, les mécanismes de contrôle financier et propose des outils pour améliorer la transparence budgétaire. Une référence indispensable pour tous ceux qui veulent participer à la bonne gouvernance."
+    },
+    {
+        "titre": "Manuel du citoyen congolais",
+        "auteur": "Société civile",
+        "categorie": "Droits citoyens",
+        "resume": "Un guide complet des droits et devoirs des citoyens congolais, avec des explications sur la Constitution, les libertés fondamentales et les mécanismes de participation citoyenne.",
+        "contenu": "Ce manuel est un outil pédagogique qui explique de manière claire et accessible les droits et devoirs des citoyens congolais. Il aborde la Constitution, les libertés fondamentales, le droit de vote, la participation citoyenne, et les recours possibles en cas de violation des droits. Un ouvrage essentiel pour former des citoyens éclairés et engagés."
+    }
 ]
 
 # ==================== TEMPLATE BASE ====================
@@ -262,6 +298,32 @@ BASE_TEMPLATE = '''
             height: 8px;
             border-radius: 1rem;
         }}
+        .toast-notification {{
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #FACC15;
+            color: #0A0F1E;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            animation: fadeInOut 3s ease forwards;
+        }}
+        @keyframes fadeInOut {{
+            0% {{ opacity: 0; transform: translateY(20px); }}
+            15% {{ opacity: 1; transform: translateY(0); }}
+            85% {{ opacity: 1; transform: translateY(0); }}
+            100% {{ opacity: 0; transform: translateY(20px); }}
+        }}
+        .last-update {{
+            font-size: 0.7rem;
+            color: #94A3B8;
+            text-align: right;
+            margin-bottom: 1rem;
+        }}
         .footer {{
             text-align: center;
             padding: 2rem;
@@ -391,6 +453,12 @@ def index():
 # ==================== DASHBOARD ====================
 DASHBOARD = '''
 <div class="hero"><h1>Tableau de bord stratégique</h1><p>Indicateurs clés de la gouvernance</p></div>
+<div class="last-update">
+    <i class="fas fa-sync-alt"></i> Dernière mise à jour : <span id="lastUpdate"></span>
+    <button id="refreshBtn" style="background:none; border:none; color:#FACC15; cursor:pointer; margin-left:10px;">
+        <i class="fas fa-arrow-rotate-right"></i> Rafraîchir
+    </button>
+</div>
 <div class="grid-4" id="kpis"></div>
 <div class="card-glass"><h3><i class="fas fa-chart-line"></i> Comparaison impôts (M$)</h3><canvas id="chart"></canvas></div>
 <div class="card-glass"><h3><i class="fas fa-users"></i> Agents de l'État</h3>
@@ -410,6 +478,36 @@ DASHBOARD = '''
 </div>
 <div class="card-glass"><h3><i class="fas fa-building"></i> Sociétés</h3><div id="societesTable"></div></div>
 <script>
+    function showToast(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast-notification';
+        toast.innerHTML = '<i class="fas fa-check-circle"></i> ' + message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+
+    function exportToCSV(data, filename) {
+        const headers = Object.keys(data[0]);
+        const csvRows = [headers.join(',')];
+        for (const row of data) {
+            const values = headers.map(header => `"${row[header]}"`);
+            csvRows.push(values.join(','));
+        }
+        const blob = new Blob(csvRows.join('\n'), { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Export CSV réussi !');
+    }
+
+    function updateLastUpdate() {
+        const span = document.getElementById('lastUpdate');
+        if (span) span.innerText = new Date().toLocaleString();
+    }
+
     async function fetchData(url) { let r = await fetch(url); return r.json(); }
     async function load() {
         let agents = await fetchData('/api/agents');
@@ -431,7 +529,7 @@ DASHBOARD = '''
             </tr>`;
         });
         document.getElementById('agentsTable').innerHTML = agentsHtml;
-        let societesHtml = '<table><thead><tr><th>Société</th><th>Impôt dû</th><th>Payé</th><th>Statut</th> </thead><tbody>';
+        let societesHtml = '<tr><thead><tr><th>Société</th><th>Impôt dû</th><th>Payé</th><th>Statut</th> </thead><tbody>';
         societes.forEach(s => {
             let badge = s.statut === 'Alerte' ? 'badge-alert' : (s.statut === 'Conforme' ? 'badge-conforme' : 'badge-modere');
             societesHtml += `<tr>
@@ -443,6 +541,27 @@ DASHBOARD = '''
         });
         societesHtml += '</tbody></table>';
         document.getElementById('societesTable').innerHTML = societesHtml;
+        
+        if (!document.getElementById('exportAgentsBtn')) {
+            const exportBtn = document.createElement('button');
+            exportBtn.id = 'exportAgentsBtn';
+            exportBtn.innerHTML = '<i class="fas fa-download"></i> Exporter agents (CSV)';
+            exportBtn.style.cssText = 'background:#0085CA; color:white; border:none; border-radius:0.5rem; padding:0.5rem 1rem; margin-top:0.5rem; cursor:pointer;';
+            exportBtn.onclick = () => exportToCSV(agents, 'agents_oyebi.csv');
+            const container = document.querySelector('.card-glass h3');
+            if (container && container.parentNode) container.parentNode.appendChild(exportBtn);
+        }
+        
+        const refreshBtn = document.getElementById('refreshBtn');
+        if (refreshBtn) {
+            refreshBtn.onclick = () => {
+                load();
+                showToast('Données actualisées');
+            };
+        }
+        
+        updateLastUpdate();
+        
         new Chart(document.getElementById('chart'), {
             type: 'bar', data: { labels: societes.map(s => s.nom), datasets: [{ label: 'Dû', data: societes.map(s => s.impot_du), backgroundColor: '#0085CA' }, { label: 'Payé', data: societes.map(s => s.impot_paye), backgroundColor: '#FACC15' }] }
         });
@@ -510,19 +629,64 @@ OBJECTIFS = '''
 def objectifs():
     return render_page("Objectifs", OBJECTIFS, '["Mesurez l\'avancement des objectifs 2025.", "Suivez les cibles de l\'administration.", "Atteignons ensemble nos ambitions nationales."]')
 
-# ==================== BIBLIOTHEQUE ====================
+# ==================== BIBLIOTHEQUE AVEC LECTURE POPUP ====================
 BIBLIOTHEQUE = '''
 <div class="hero"><h1><i class="fas fa-book-open"></i> Bibliothèque citoyenne</h1><p>Lectures pour renforcer la gouvernance</p></div>
 <div class="grid-3" id="booksGrid"></div>
+
+<!-- Modal pour lire le contenu -->
+<div id="bookModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:2000; justify-content:center; align-items:center;">
+    <div style="background:#0A0F1E; border-radius:1rem; max-width:600px; width:90%; max-height:80vh; overflow-y:auto; padding:2rem; border:1px solid #FACC15;">
+        <div style="text-align:right;">
+            <button onclick="closeModal()" style="background:none; border:none; color:#FACC15; font-size:2rem; cursor:pointer;">&times;</button>
+        </div>
+        <h2 id="modalTitle" style="color:#FACC15; margin-bottom:0.5rem;"></h2>
+        <p id="modalAuthor" style="color:#94A3B8; margin-bottom:1rem;"></p>
+        <h3 style="color:#0085CA; margin-top:1rem;">Résumé</h3>
+        <p id="modalResume" style="line-height:1.6;"></p>
+        <h3 style="color:#0085CA; margin-top:1rem;">Extrait / Contenu</h3>
+        <p id="modalContent" style="line-height:1.6;"></p>
+    </div>
+</div>
+
 <script>
+    let livresData = [];
+
     async function loadBooks() {
-        let livres = await (await fetch('/api/livres')).json();
+        const res = await fetch('/api/livres');
+        livresData = await res.json();
         let html = '';
-        for (let l of livres) {
-            html += `<div class="card-glass"><i class="fas fa-book" style="font-size:1.5rem; color:#FACC15;"></i><h3>${l.titre}</h3><p>${l.auteur}</p><small>${l.categorie}</small></div>`;
+        for (let i = 0; i < livresData.length; i++) {
+            const l = livresData[i];
+            html += `
+                <div class="card-glass" style="cursor:pointer;" onclick="openBookModal(${i})">
+                    <i class="fas fa-book" style="font-size:2rem; color:#FACC15; margin-bottom:1rem;"></i>
+                    <h3>${l.titre}</h3>
+                    <p>${l.auteur}</p>
+                    <small style="color:#94A3B8;">${l.categorie}</small>
+                    <p style="margin-top:0.8rem; font-size:0.85rem;">${l.resume.substring(0, 120)}...</p>
+                    <div style="margin-top:1rem;">
+                        <button style="background:#0085CA; color:white; border:none; border-radius:0.5rem; padding:0.3rem 0.8rem; cursor:pointer;">Lire l'extrait</button>
+                    </div>
+                </div>
+            `;
         }
         document.getElementById('booksGrid').innerHTML = html;
     }
+
+    function openBookModal(index) {
+        const livre = livresData[index];
+        document.getElementById('modalTitle').innerText = livre.titre;
+        document.getElementById('modalAuthor').innerHTML = `<i class="fas fa-user"></i> ${livre.auteur} | <i class="fas fa-tag"></i> ${livre.categorie}`;
+        document.getElementById('modalResume').innerText = livre.resume;
+        document.getElementById('modalContent').innerText = livre.contenu;
+        document.getElementById('bookModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('bookModal').style.display = 'none';
+    }
+
     loadBooks();
 </script>
 '''

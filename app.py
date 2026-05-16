@@ -1,7 +1,54 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request, session, redirect, url_for
+from functools import wraps
 import json
+import hashlib
+import secrets
+from datetime import datetime
 
 app = Flask(__name__)
+app.secret_key = 'oyebi_secret_key_2026'
+
+# ==================== AUTH (optionnelle, gardée mais désactivable) ====================
+users = {}
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+    name = data.get('name')
+    if email in users:
+        return jsonify({"error": "Email déjà utilisé"}), 400
+    users[email] = {"name": name, "password": hash_password(password), "email": email}
+    return jsonify({"message": "Compte créé avec succès !"}), 201
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+    user = users.get(email)
+    if not user or user['password'] != hash_password(password):
+        return jsonify({"error": "Email ou mot de passe incorrect"}), 401
+    token = secrets.token_hex(32)
+    session['user'] = email
+    return jsonify({"token": token, "user": {"name": user['name'], "email": user['email']}}), 200
+
+@app.route('/api/logout', methods=['POST'])
+def logout():
+    session.pop('user', None)
+    return jsonify({"message": "Déconnecté"}), 200
+
+@app.route('/api/me')
+def me():
+    email = session.get('user')
+    if not email:
+        return jsonify({"error": "Non authentifié"}), 401
+    user = users.get(email)
+    return jsonify({"name": user['name'], "email": user['email']}), 200
 
 # ==================== DONNEES ====================
 AGENTS = [
@@ -18,20 +65,20 @@ SOCIETES = [
 ]
 
 LIVRES = [
-    {"titre": "Le prix de la corruption", "auteur": "M. Nkolo", "categorie": "Anti-corruption"},
-    {"titre": "Gestion des finances publiques", "auteur": "J. Tshibangu", "categorie": "Finances"},
-    {"titre": "Manuel du citoyen congolais", "auteur": "Société civile", "categorie": "Droits citoyens"},
+    {"titre": "Le prix de la corruption", "auteur": "M. Nkolo", "categorie": "Anti-corruption", "resume": "Analyse des mécanismes de la corruption en Afrique centrale.", "contenu": "La corruption est un fléau qui touche tous les secteurs de la société congolaise."},
+    {"titre": "Gestion des finances publiques", "auteur": "J. Tshibangu", "categorie": "Finances", "resume": "Guide pratique pour comprendre les finances publiques en RDC.", "contenu": "Ce guide s'adresse aux agents publics et aux citoyens."},
+    {"titre": "Manuel du citoyen congolais", "auteur": "Société civile", "categorie": "Droits citoyens", "resume": "Guide complet des droits et devoirs des citoyens congolais.", "contenu": "Ce manuel est un outil pédagogique."}
 ]
 
-# ==================== TEMPLATE BASE (sans conflit avec .format) ====================
-BASE_TEMPLATE = '''
+# ==================== TEMPLATE UNIQUE ====================
+BASE = '''
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OYEBI · [TITLE]</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -63,10 +110,13 @@ BASE_TEMPLATE = '''
         .badge-modere { background: rgba(250,204,21,0.2); color: #FACC15; }
         .progress-bar { background: rgba(255,255,255,0.1); border-radius: 1rem; height: 8px; margin: 0.5rem 0; overflow: hidden; }
         .progress-fill { background: #FACC15; width: 0%; height: 8px; border-radius: 1rem; }
-        .footer { text-align: center; padding: 2rem; border-top: 1px solid rgba(255,255,255,0.1); font-size: 0.8rem; color: #64748B; }
+        .toast-notification { position: fixed; bottom: 20px; right: 20px; background: #FACC15; color: #0A0F1E; padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; z-index: 1000; animation: fadeInOut 3s ease forwards; }
+        @keyframes fadeInOut { 0% { opacity: 0; transform: translateY(20px); } 15% { opacity: 1; transform: translateY(0); } 85% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(20px); } }
+        .last-update { font-size: 0.7rem; color: #94A3B8; text-align: right; margin-bottom: 1rem; }
+        .footer { text-align: center; padding: 2rem; border-top: 1px solid rgba(255,255,255,0.1); font-size: 0.8rem; color: #64748B; margin-top: 2rem; }
         canvas { max-width: 100%; height: auto; }
         @media (max-width: 768px) { .navbar { flex-direction: column; text-align: center; padding: 1rem; } .nav-links { justify-content: center; gap: 1rem; } .container { padding: 6rem 1rem 2rem; } .hero { padding: 2rem 1rem; } .hero h1 { font-size: 1.8rem; } }
-        @media (max-width: 480px) { .grid-4, .grid-3 { grid-template-columns: 1fr; } .nav-links { flex-direction: column; gap: 0.5rem; } }
+        @media (max-width: 480px) { .grid-4, .grid-3 { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
@@ -82,9 +132,7 @@ BASE_TEMPLATE = '''
         <a href="/apropos">À propos</a>
     </div>
 </nav>
-<div class="container">
-    [CONTENT]
-</div>
+<div class="container">[CONTENT]</div>
 <footer class="footer">OYEBI · Gouvernance transparente · Kinshasa, RDC</footer>
 <script>
     particlesJS("particles-js", {
@@ -122,9 +170,8 @@ BASE_TEMPLATE = '''
 </html>
 '''
 
-def render_page(title, content, phrases):
-    html = BASE_TEMPLATE.replace("[TITLE]", title).replace("[CONTENT]", content).replace("[PHRASES]", phrases)
-    return html
+def render(title, content, phrases):
+    return BASE.replace("[TITLE]", title).replace("[CONTENT]", content).replace("[PHRASES]", phrases)
 
 # ==================== PAGE ACCUEIL ====================
 ACCUEIL = '''
@@ -141,11 +188,15 @@ ACCUEIL = '''
 
 @app.route('/')
 def index():
-    return render_page("Accueil", ACCUEIL, '["La transparence au service de la nation.", "Données publiques pour un Congo qui avance.", "Ensemble, bâtissons une administration exemplaire."]')
+    return render("Accueil", ACCUEIL, '["La transparence au service de la nation.", "Données publiques pour un Congo qui avance.", "Ensemble, bâtissons une administration exemplaire."]')
 
 # ==================== DASHBOARD ====================
 DASHBOARD = '''
 <div class="hero"><h1>Tableau de bord stratégique</h1><p>Indicateurs clés de la gouvernance</p></div>
+<div class="last-update">
+    <i class="fas fa-sync-alt"></i> Dernière mise à jour : <span id="lastUpdate"></span>
+    <button id="refreshBtn" style="background:none; border:none; color:#FACC15; cursor:pointer; margin-left:10px;"><i class="fas fa-arrow-rotate-right"></i> Rafraîchir</button>
+</div>
 <div class="grid-4" id="kpis"></div>
 <div class="card-glass"><h3><i class="fas fa-chart-line"></i> Comparaison impôts (M$)</h3><canvas id="chart"></canvas></div>
 <div class="card-glass"><h3><i class="fas fa-users"></i> Agents de l'État</h3>
@@ -158,32 +209,22 @@ DASHBOARD = '''
 </div>
 <div class="card-glass"><h3><i class="fas fa-building"></i> Sociétés</h3><div id="societesTable"></div></div>
 <script>
-    async function fetchData(url) { let r = await fetch(url); return r.json(); }
+    function showToast(m) { var t = document.createElement('div'); t.className = 'toast-notification'; t.innerHTML = '<i class="fas fa-check-circle"></i> ' + m; document.body.appendChild(t); setTimeout(function() { t.remove(); }, 3000); }
+    function exportCSV(data, filename) { var h = Object.keys(data[0]); var r = [h.join(',')]; for (var i = 0; i < data.length; i++) { var v = h.map(function(k) { return '"' + data[i][k] + '"'; }); r.push(v.join(',')); } var b = new Blob([r.join('\\n')], { type: 'text/csv' }); var u = URL.createObjectURL(b); var a = document.createElement('a'); a.href = u; a.download = filename; a.click(); URL.revokeObjectURL(u); showToast('Export CSV réussi !'); }
+    function updateLast() { var s = document.getElementById('lastUpdate'); if (s) s.innerText = new Date().toLocaleString(); }
+    async function fetchData(url) { var r = await fetch(url); return r.json(); }
     async function load() {
-        let agents = await fetchData('/api/agents');
-        let societes = await fetchData('/api/societes');
-        let stats = await fetchData('/api/stats');
-        document.getElementById('kpis').innerHTML = `
-            <div class="card-glass"><div class="kpi-value">${stats.nb_agents}</div><div>Agents</div></div>
-            <div class="card-glass"><div class="kpi-value">${stats.nb_societes}</div><div>Sociétés</div></div>
-            <div class="card-glass"><div class="kpi-value">${(stats.masse_salariale/1e6).toFixed(1)}M</div><div>Masse salariale</div></div>
-            <div class="card-glass"><div class="kpi-value">${(stats.manque_fiscal/1e6).toFixed(0)}M</div><div>Manque 2025</div></div>
-        `;
-        let agentsHtml = '';
-        agents.forEach(a => {
-            agentsHtml += `<tr><td><strong>${a.id}</strong></td><td>${a.nom}</td><td><span class="grade-badge">${a.grade}</span></td><td class="salaire">${(a.salaire/1e6).toFixed(2)} M FC</td></tr>`;
-        });
-        document.getElementById('agentsTable').innerHTML = agentsHtml;
-        let societesHtml = '<thead><tr><th>Société</th><th>Impôt dû</th><th>Payé</th><th>Statut</th></tr></thead><tbody>';
-        societes.forEach(s => {
-            let badge = s.statut === 'Alerte' ? 'badge-alert' : (s.statut === 'Conforme' ? 'badge-conforme' : 'badge-modere');
-            societesHtml += `<tr><td><strong>${s.nom}</strong></td><td>${s.impot_du} M$</td><td>${s.impot_paye} M$</td><td><span class="${badge}">${s.statut}</span></td></tr>`;
-        });
-        societesHtml += '</tbody>';
-        document.getElementById('societesTable').innerHTML = societesHtml;
-        new Chart(document.getElementById('chart'), {
-            type: 'bar', data: { labels: societes.map(s => s.nom), datasets: [{ label: 'Dû', data: societes.map(s => s.impot_du), backgroundColor: '#0085CA' }, { label: 'Payé', data: societes.map(s => s.impot_paye), backgroundColor: '#FACC15' }] }
-        });
+        var a = await fetchData('/api/agents'), s = await fetchData('/api/societes'), st = await fetchData('/api/stats');
+        document.getElementById('kpis').innerHTML = '<div class="card-glass"><div class="kpi-value">' + st.nb_agents + '</div><div>Agents</div></div><div class="card-glass"><div class="kpi-value">' + st.nb_societes + '</div><div>Sociétés</div></div><div class="card-glass"><div class="kpi-value">' + (st.masse_salariale/1e6).toFixed(1) + 'M</div><div>Masse salariale</div></div><div class="card-glass"><div class="kpi-value">' + (st.manque_fiscal/1e6).toFixed(0) + 'M</div><div>Manque 2025</div></div>';
+        var ah = ''; a.forEach(function(ag) { ah += '<tr><td><strong>' + ag.id + '</strong></td><td>' + ag.nom + '</td><td><span class="grade-badge">' + ag.grade + '</span></td><td class="salaire">' + (ag.salaire/1e6).toFixed(2) + ' M FC</td></tr>'; });
+        document.getElementById('agentsTable').innerHTML = ah;
+        var sh = '<thead><tr><th>Société</th><th>Impôt dû</th><th>Payé</th><th>Statut</th></tr></thead><tbody>';
+        s.forEach(function(soc) { var b = soc.statut === 'Alerte' ? 'badge-alert' : (soc.statut === 'Conforme' ? 'badge-conforme' : 'badge-modere'); sh += '<tr><td><strong>' + soc.nom + '</strong></td><td>' + soc.impot_du + ' M$</td><td>' + soc.impot_paye + ' M$</td><td><span class="' + b + '">' + soc.statut + '</span></td></tr>'; });
+        sh += '</tbody>'; document.getElementById('societesTable').innerHTML = sh;
+        if (!document.getElementById('exportBtn')) { var btn = document.createElement('button'); btn.id = 'exportBtn'; btn.innerHTML = '<i class="fas fa-download"></i> Exporter agents (CSV)'; btn.style.cssText = 'background:#0085CA; color:white; border:none; border-radius:0.5rem; padding:0.5rem 1rem; margin-top:0.5rem; cursor:pointer;'; btn.onclick = function() { exportCSV(a, 'agents_oyebi.csv'); }; var c = document.querySelector('.card-glass h3'); if (c && c.parentNode) c.parentNode.appendChild(btn); }
+        var rb = document.getElementById('refreshBtn'); if (rb) rb.onclick = function() { load(); showToast('Données actualisées'); };
+        updateLast();
+        new Chart(document.getElementById('chart'), { type: 'bar', data: { labels: s.map(function(x) { return x.nom; }), datasets: [{ label: 'Dû', data: s.map(function(x) { return x.impot_du; }), backgroundColor: '#0085CA' }, { label: 'Payé', data: s.map(function(x) { return x.impot_paye; }), backgroundColor: '#FACC15' }] } });
     }
     load();
 </script>
@@ -191,7 +232,7 @@ DASHBOARD = '''
 
 @app.route('/dashboard')
 def dashboard():
-    return render_page("Dashboard", DASHBOARD, '["Visualisez les indicateurs clés en temps réel.", "Suivez l\'évolution des impôts et des agents.", "Prenez des décisions basées sur des données fiables."]')
+    return render("Dashboard", DASHBOARD, '["Visualisez les indicateurs clés en temps réel.", "Suivez l\'évolution des impôts et des agents.", "Prenez des décisions basées sur des données fiables."]')
 
 # ==================== INSIGHTS ====================
 INSIGHTS = '''
@@ -200,22 +241,14 @@ INSIGHTS = '''
 <div class="card-glass"><h3>Répartition du manque fiscal</h3><canvas id="donut"></canvas></div>
 <script>
     async function loadInsights() {
-        let societes = await (await fetch('/api/societes')).json();
-        let total = societes.reduce((s,c)=>s+(c.impot_du-c.impot_paye),0);
-        let mines = societes.find(s=>s.nom==='Minière du Congo');
-        let telecom = societes.find(s=>s.nom==='Telecom Congo');
-        let btp = societes.find(s=>s.nom==='BTP Congo');
-        let m = mines.impot_du - mines.impot_paye;
-        let t = telecom.impot_du - telecom.impot_paye;
-        let b = btp.impot_du - btp.impot_paye;
-        document.getElementById('insightsGrid').innerHTML = `
-            <div class="card-glass"><h3>Mines</h3><div class="kpi-value">${m}M$</div><div>${Math.round(m/total*100)}% du total</div></div>
-            <div class="card-glass"><h3>Télécoms</h3><div class="kpi-value">${t}M$</div><div>${Math.round(t/total*100)}%</div></div>
-            <div class="card-glass"><h3>BTP</h3><div class="kpi-value">${b}M$</div><div>${Math.round(b/total*100)}%</div></div>
-        `;
-        new Chart(document.getElementById('donut'), {
-            type: 'doughnut', data: { labels: ['Mines','Télécoms','BTP','Commerce'], datasets: [{ data: societes.map(s=>s.impot_du-s.impot_paye), backgroundColor: ['#0085CA','#FACC15','#EF4444','#10B981'] }] }
-        });
+        var s = await (await fetch('/api/societes')).json();
+        var t = s.reduce(function(acc,cur) { return acc + (cur.impot_du - cur.impot_paye); }, 0);
+        var mines = s.find(function(x) { return x.nom === 'Minière du Congo'; });
+        var telecom = s.find(function(x) { return x.nom === 'Telecom Congo'; });
+        var btp = s.find(function(x) { return x.nom === 'BTP Congo'; });
+        var m = mines.impot_du - mines.impot_paye, tc = telecom.impot_du - telecom.impot_paye, b = btp.impot_du - btp.impot_paye;
+        document.getElementById('insightsGrid').innerHTML = '<div class="card-glass"><h3>Mines</h3><div class="kpi-value">' + m + 'M$</div><div>' + Math.round(m/t*100) + '% du total</div></div><div class="card-glass"><h3>Télécoms</h3><div class="kpi-value">' + tc + 'M$</div><div>' + Math.round(tc/t*100) + '%</div></div><div class="card-glass"><h3>BTP</h3><div class="kpi-value">' + b + 'M$</div><div>' + Math.round(b/t*100) + '%</div></div>';
+        new Chart(document.getElementById('donut'), { type: 'doughnut', data: { labels: ['Mines','Télécoms','BTP','Commerce'], datasets: [{ data: s.map(function(x) { return x.impot_du - x.impot_paye; }), backgroundColor: ['#0085CA','#FACC15','#EF4444','#10B981'] }] } });
     }
     loadInsights();
 </script>
@@ -223,7 +256,7 @@ INSIGHTS = '''
 
 @app.route('/insights')
 def insights():
-    return render_page("Insights", INSIGHTS, '["Analyse des écarts fiscaux par secteur.", "Découvrez les tendances et anomalies.", "Des données pour mieux comprendre l\'économie."]')
+    return render("Insights", INSIGHTS, '["Analyse des écarts fiscaux par secteur.", "Découvrez les tendances et anomalies.", "Des données pour mieux comprendre l\'économie."]')
 
 # ==================== OBJECTIFS ====================
 OBJECTIFS = '''
@@ -232,13 +265,13 @@ OBJECTIFS = '''
 <div class="card-glass"><h3>Agents formés</h3><div id="o2"></div><div class="progress-bar"><div id="b2" class="progress-fill"></div></div></div>
 <script>
     async function load() {
-        let stats = await (await fetch('/api/stats')).json();
-        let obj1 = { objectif: 15000, realise: stats.manque_fiscal/1e6 };
-        let obj2 = { objectif: 500, realise: 120 };
-        document.getElementById('o1').innerHTML = `<i class="fas fa-chart-simple"></i> Objectif ${obj1.objectif}M$ | <i class="fas fa-check-circle"></i> Réalisé ${obj1.realise}M$`;
-        document.getElementById('o2').innerHTML = `<i class="fas fa-chart-simple"></i> Objectif ${obj2.objectif} agents | <i class="fas fa-check-circle"></i> Réalisé ${obj2.realise} agents`;
-        document.getElementById('b1').style.width = `${Math.min((obj1.realise/obj1.objectif)*100,100)}%`;
-        document.getElementById('b2').style.width = `${Math.min((obj2.realise/obj2.objectif)*100,100)}%`;
+        var st = await (await fetch('/api/stats')).json();
+        var o1 = { obj: 15000, real: st.manque_fiscal/1e6 };
+        var o2 = { obj: 500, real: 120 };
+        document.getElementById('o1').innerHTML = '<i class="fas fa-chart-simple"></i> Objectif ' + o1.obj + 'M$ | <i class="fas fa-check-circle"></i> Réalisé ' + o1.real + 'M$';
+        document.getElementById('o2').innerHTML = '<i class="fas fa-chart-simple"></i> Objectif ' + o2.obj + ' agents | <i class="fas fa-check-circle"></i> Réalisé ' + o2.real + ' agents';
+        document.getElementById('b1').style.width = Math.min((o1.real/o1.obj)*100,100) + '%';
+        document.getElementById('b2').style.width = Math.min((o2.real/o2.obj)*100,100) + '%';
     }
     load();
 </script>
@@ -246,28 +279,31 @@ OBJECTIFS = '''
 
 @app.route('/objectifs')
 def objectifs():
-    return render_page("Objectifs", OBJECTIFS, '["Mesurez l\'avancement des objectifs 2025.", "Suivez les cibles de l\'administration.", "Atteignons ensemble nos ambitions nationales."]')
+    return render("Objectifs", OBJECTIFS, '["Mesurez l\'avancement des objectifs 2025.", "Suivez les cibles de l\'administration.", "Atteignons ensemble nos ambitions nationales."]')
 
 # ==================== BIBLIOTHEQUE ====================
 BIBLIOTHEQUE = '''
 <div class="hero"><h1><i class="fas fa-book-open"></i> Bibliothèque citoyenne</h1><p>Lectures pour renforcer la gouvernance</p></div>
 <div class="grid-3" id="booksGrid"></div>
+<div id="bookModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:2000; justify-content:center; align-items:center;"><div style="background:#0A0F1E; border-radius:1rem; max-width:600px; width:90%; max-height:80vh; overflow-y:auto; padding:2rem; border:1px solid #FACC15;"><div style="text-align:right;"><button onclick="closeModal()" style="background:none; border:none; color:#FACC15; font-size:2rem; cursor:pointer;">&times;</button></div><h2 id="modalTitle" style="color:#FACC15;"></h2><p id="modalAuthor" style="color:#94A3B8;"></p><h3 style="color:#0085CA;">Résumé</h3><p id="modalResume"></p><h3 style="color:#0085CA;">Extrait</h3><p id="modalContent"></p></div></div>
 <script>
+    var livresData = [];
     async function loadBooks() {
-        let livres = await (await fetch('/api/livres')).json();
-        let html = '';
-        for (let l of livres) {
-            html += `<div class="card-glass"><i class="fas fa-book" style="font-size:1.5rem; color:#FACC15;"></i><h3>${l.titre}</h3><p>${l.auteur}</p><small>${l.categorie}</small></div>`;
-        }
+        var res = await fetch('/api/livres');
+        livresData = await res.json();
+        var html = '';
+        for (var i = 0; i < livresData.length; i++) { var l = livresData[i]; html += '<div class="card-glass" style="cursor:pointer;" onclick="openBookModal(' + i + ')"><i class="fas fa-book" style="font-size:2rem; color:#FACC15;"></i><h3>' + l.titre + '</h3><p>' + l.auteur + '</p><small>' + l.categorie + '</small><p style="margin-top:0.8rem; font-size:0.85rem;">' + l.resume.substring(0,120) + '...</p><div style="margin-top:1rem;"><button style="background:#0085CA; color:white; border:none; border-radius:0.5rem; padding:0.3rem 0.8rem; cursor:pointer;">Lire l\'extrait</button></div></div>'; }
         document.getElementById('booksGrid').innerHTML = html;
     }
+    function openBookModal(i) { var l = livresData[i]; document.getElementById('modalTitle').innerText = l.titre; document.getElementById('modalAuthor').innerHTML = '<i class="fas fa-user"></i> ' + l.auteur + ' | <i class="fas fa-tag"></i> ' + l.categorie; document.getElementById('modalResume').innerText = l.resume; document.getElementById('modalContent').innerText = l.contenu; document.getElementById('bookModal').style.display = 'flex'; }
+    function closeModal() { document.getElementById('bookModal').style.display = 'none'; }
     loadBooks();
 </script>
 '''
 
 @app.route('/bibliotheque')
 def bibliotheque():
-    return render_page("Bibliothèque", BIBLIOTHEQUE, '["Des livres pour comprendre la gouvernance.", "La connaissance au service de la transparence.", "Formez-vous pour mieux agir."]')
+    return render("Bibliothèque", BIBLIOTHEQUE, '["Des livres pour comprendre la gouvernance.", "La connaissance au service de la transparence.", "Formez-vous pour mieux agir."]')
 
 # ==================== À PROPOS ====================
 APROPOS = '''
@@ -276,12 +312,65 @@ APROPOS = '''
 <div class="card-glass"><h2><i class="fas fa-flag-checkered"></i> Notre Mission</h2><p>Offrir une plateforme accessible, fiable et moderne qui centralise les données essentielles de l'administration congolaise.</p></div>
 <div class="card-glass"><h2><i class="fas fa-gem"></i> Nos Valeurs</h2><div class="grid-3"><div class="card-glass"><i class="fas fa-eye"></i><h3>Transparence</h3></div><div class="card-glass"><i class="fas fa-shield-alt"></i><h3>Intégrité</h3></div><div class="card-glass"><i class="fas fa-chart-line"></i><h3>Innovation</h3></div></div></div>
 <div class="card-glass"><h2><i class="fas fa-globe-africa"></i> Pourquoi OYEBI ?</h2><p>Le nom OYEBI signifie "savoir" en lingala. Un citoyen informé est un citoyen qui peut agir.</p></div>
-<div class="card-glass" style="text-align: center;"><h2><i class="fas fa-laptop-code"></i> Concepteur</h2><p><strong>Kenny Kabulo Matanda</strong><br>Kinshasa, RDC</p></div>
+<div class="card-glass" style="text-align:center;"><h2><i class="fas fa-laptop-code"></i> Concepteur</h2><p><strong>Kenny Kabulo Matanda</strong><br>Kinshasa, RDC</p></div>
 '''
 
 @app.route('/apropos')
 def apropos():
-    return render_page("À propos", APROPOS, '["Une vision pour un Congo transparent.", "La donnée au service du citoyen.", "Innovation et intégrité."]')
+    return render("À propos", APROPOS, '["Une vision pour un Congo transparent.", "La donnée au service du citoyen.", "Innovation et intégrité."]')
+
+# ==================== PAGE CONNEXION ====================
+LOGIN_PAGE = '''
+<div style="max-width: 500px; margin: 0 auto;">
+    <div class="card-glass">
+        <h2 style="text-align:center;" id="formTitle">Créer un compte</h2>
+        <div id="loginForm" style="display: none;">
+            <input type="email" id="loginEmail" placeholder="Email" style="width:100%; padding:0.8rem; margin-bottom:1rem; background:rgba(255,255,255,0.05); border-radius:0.5rem; color:white;">
+            <input type="password" id="loginPassword" placeholder="Mot de passe" style="width:100%; padding:0.8rem; margin-bottom:1rem; background:rgba(255,255,255,0.05); border-radius:0.5rem; color:white;">
+            <div style="margin:0.5rem 0 1rem 0;"><input type="checkbox" id="showLoginPassword"> <label>Afficher</label></div>
+            <button onclick="login()" style="width:100%; padding:0.8rem; background:#FACC15; color:#0A0F1E; border:none; border-radius:0.5rem; font-weight:bold; cursor:pointer;">Se connecter</button>
+            <div style="text-align:center; margin-top:1rem;">Pas encore de compte ? <span onclick="showRegister()" style="color:#FACC15; cursor:pointer;">S'inscrire</span></div>
+        </div>
+        <div id="registerForm">
+            <input type="text" id="regName" placeholder="Nom" style="width:100%; padding:0.8rem; margin-bottom:1rem; background:rgba(255,255,255,0.05); border-radius:0.5rem; color:white;">
+            <input type="email" id="regEmail" placeholder="Email" style="width:100%; padding:0.8rem; margin-bottom:1rem; background:rgba(255,255,255,0.05); border-radius:0.5rem; color:white;">
+            <input type="password" id="regPassword" placeholder="Mot de passe" style="width:100%; padding:0.8rem; margin-bottom:1rem; background:rgba(255,255,255,0.05); border-radius:0.5rem; color:white;">
+            <div style="margin:0.5rem 0 1rem 0;"><input type="checkbox" id="showRegPassword"> <label>Afficher</label></div>
+            <button onclick="register()" style="width:100%; padding:0.8rem; background:#FACC15; color:#0A0F1E; border:none; border-radius:0.5rem; font-weight:bold; cursor:pointer;">Créer mon compte</button>
+            <div style="text-align:center; margin-top:1rem;">Déjà un compte ? <span onclick="showLogin()" style="color:#FACC15; cursor:pointer;">Se connecter</span></div>
+        </div>
+        <div id="message" style="color:#EF4444; text-align:center; margin-top:1rem;"></div>
+    </div>
+</div>
+<script>
+    if(document.getElementById('showLoginPassword')) document.getElementById('showLoginPassword').onchange = function() { document.getElementById('loginPassword').type = this.checked ? 'text' : 'password'; };
+    if(document.getElementById('showRegPassword')) document.getElementById('showRegPassword').onchange = function() { document.getElementById('regPassword').type = this.checked ? 'text' : 'password'; };
+    function showLogin() { document.getElementById('registerForm').style.display = 'none'; document.getElementById('loginForm').style.display = 'block'; document.getElementById('formTitle').innerText = 'Connexion'; document.getElementById('message').innerHTML = ''; }
+    function showRegister() { document.getElementById('registerForm').style.display = 'block'; document.getElementById('loginForm').style.display = 'none'; document.getElementById('formTitle').innerText = 'Créer un compte'; document.getElementById('message').innerHTML = ''; }
+    async function register() { var r = await fetch('/api/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: document.getElementById('regName').value, email: document.getElementById('regEmail').value, password: document.getElementById('regPassword').value }) }); var d = await r.json(); if (r.ok) { document.getElementById('message').innerHTML = '<div style="color:#4ADE80;"> ' + d.message + '</div>'; setTimeout(showLogin, 2000); } else { document.getElementById('message').innerHTML = '<div style="color:#EF4444;"> ' + d.error + '</div>'; } }
+    async function login() { var r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: document.getElementById('loginEmail').value, password: document.getElementById('loginPassword').value }) }); var d = await r.json(); if (r.ok) { localStorage.setItem('token', d.token); window.location.href = '/mon-compte'; } else { document.getElementById('message').innerHTML = '<div style="color:#EF4444;"> ' + d.error + '</div>'; } }
+    if (localStorage.getItem('token')) { window.location.href = '/mon-compte'; }
+</script>
+'''
+
+@app.route('/login')
+def login_page():
+    return render("Connexion", LOGIN_PAGE, '["Connectez-vous à votre espace", "Accédez aux données sécurisées", "Identifiez-vous pour continuer"]')
+
+# ==================== MON COMPTE ====================
+MON_COMPTE = '''
+<div class="hero"><h1><i class="fas fa-user-circle"></i> Mon compte</h1><p>Bienvenue</p></div>
+<div class="card-glass" style="text-align:center;"><div id="userInfo"></div><button onclick="logout()" style="margin-top:1rem; background:#EF4444; color:white; border:none; border-radius:0.5rem; padding:0.5rem 1rem; cursor:pointer;"><i class="fas fa-sign-out-alt"></i> Se déconnecter</button></div>
+<script>
+    async function loadUser() { var r = await fetch('/api/me'); if (r.ok) { var u = await r.json(); document.getElementById('userInfo').innerHTML = '<i class="fas fa-user" style="font-size:3rem; color:#FACC15;"></i><h2>' + u.name + '</h2><p><i class="fas fa-envelope"></i> ' + u.email + '</p><p><i class="fas fa-calendar"></i> Membre depuis 2025</p>'; } else { window.location.href = '/login'; } }
+    async function logout() { await fetch('/api/logout', { method: 'POST' }); localStorage.removeItem('token'); window.location.href = '/'; }
+    loadUser();
+</script>
+'''
+
+@app.route('/mon-compte')
+def mon_compte():
+    return render("Mon compte", MON_COMPTE, '["Bienvenue dans votre espace", "Gérez vos informations", "Accédez aux fonctionnalités réservées"]')
 
 # ==================== API ====================
 @app.route('/api/agents')

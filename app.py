@@ -1,523 +1,431 @@
-import os
-import json
+from flask import Flask, jsonify, request, session
 import hashlib
 import secrets
-import asyncio
+import requests
+import os
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, field
-from enum import Enum
-import asyncpg
-import redis.asyncio as redis
-from fastapi import FastAPI, HTTPException, Depends, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, Field
-import jwt
-from cryptography.fernet import Fernet
+
+app = Flask(__name__)
+app.secret_key = 'kennyson_ouragan_secret_2026'
 
 # ==================================================
-# CONFIGURATION CENTRALE
+# CONFIGURATIONS API
 # ==================================================
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
+GNEWS_API_KEY = os.environ.get('GNEWS_API_KEY', '50627028ad0739bffdf75505815cfeae')
 
-class Config:
-    SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_urlsafe(32))
-    JWT_ALGORITHM = "HS256"
-    JWT_EXPIRY = 3600 * 24 * 7  # 7 jours
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GNEWS_URL = "https://gnews.io/api/v4/search"
+
+# ==================================================
+# BASE DE DONNÉES ÉCONOMIQUE MONDIALE (15+ pays)
+# ==================================================
+ECONOMIES_MONDIALES = {
+    "États-Unis": {"code": "US", "pib": 25400000, "inflation": 3.2, "croissance": 2.1, "monnaie": "$", "chomage": 3.8, "capitale": "Washington"},
+    "Chine": {"code": "CN", "pib": 17800000, "inflation": 1.8, "croissance": 5.2, "monnaie": "¥", "chomage": 5.0, "capitale": "Pékin"},
+    "France": {"code": "FR", "pib": 2780000, "inflation": 2.5, "croissance": 1.8, "monnaie": "€", "chomage": 7.2, "capitale": "Paris"},
+    "RDC": {"code": "CD", "pib": 65000, "inflation": 18.5, "croissance": 4.5, "monnaie": "FC", "chomage": 22.0, "capitale": "Kinshasa"},
+    "Nigeria": {"code": "NG", "pib": 440000, "inflation": 24.5, "croissance": 2.9, "monnaie": "₦", "chomage": 33.0, "capitale": "Abuja"},
+    "Afrique du Sud": {"code": "ZA", "pib": 419000, "inflation": 5.5, "croissance": 1.2, "monnaie": "R", "chomage": 32.0, "capitale": "Pretoria"},
+    "Brésil": {"code": "BR", "pib": 1920000, "inflation": 4.6, "croissance": 2.5, "monnaie": "R$", "chomage": 8.5, "capitale": "Brasilia"},
+    "Inde": {"code": "IN", "pib": 3730000, "inflation": 5.2, "croissance": 6.5, "monnaie": "₹", "chomage": 6.8, "capitale": "New Delhi"},
+    "Allemagne": {"code": "DE", "pib": 4080000, "inflation": 2.1, "croissance": 1.5, "monnaie": "€", "chomage": 3.1, "capitale": "Berlin"},
+    "Japon": {"code": "JP", "pib": 4230000, "inflation": 1.5, "croissance": 1.8, "monnaie": "¥", "chomage": 2.6, "capitale": "Tokyo"},
+    "Royaume-Uni": {"code": "GB", "pib": 3070000, "inflation": 2.8, "croissance": 1.9, "monnaie": "£", "chomage": 4.0, "capitale": "Londres"},
+    "Canada": {"code": "CA", "pib": 2140000, "inflation": 2.4, "croissance": 2.2, "monnaie": "C$", "chomage": 5.1, "capitale": "Ottawa"},
+    "Australie": {"code": "AU", "pib": 1690000, "inflation": 2.6, "croissance": 2.3, "monnaie": "A$", "chomage": 3.7, "capitale": "Canberra"},
+    "Russie": {"code": "RU", "pib": 2240000, "inflation": 6.5, "croissance": 1.1, "monnaie": "₽", "chomage": 3.9, "capitale": "Moscou"},
+    "Turquie": {"code": "TR", "pib": 1080000, "inflation": 45.0, "croissance": 3.5, "monnaie": "₺", "chomage": 10.2, "capitale": "Ankara"},
+    "Maroc": {"code": "MA", "pib": 142000, "inflation": 2.8, "croissance": 3.2, "monnaie": "DH", "chomage": 12.0, "capitale": "Rabat"},
+    "Kenya": {"code": "KE", "pib": 113000, "inflation": 5.8, "croissance": 5.0, "monnaie": "KSh", "chomage": 7.5, "capitale": "Nairobi"},
+    "Angola": {"code": "AO", "pib": 106000, "inflation": 15.2, "croissance": 3.0, "monnaie": "Kz", "chomage": 30.0, "capitale": "Luanda"},
+}
+
+# ==================================================
+# FONCTIONS GNEWS (INTERNATIONAL)
+# ==================================================
+def get_international_news(query, pays=None, lang="fr"):
+    """Récupère actualités économiques internationales"""
+    if not GNEWS_API_KEY:
+        return []
     
-    # Bases de données
-    POSTGRES_DSN = os.getenv("DATABASE_URL", "postgresql://user:pass@localhost/oyebi")
-    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+    recherche = f"{query}"
+    if pays:
+        recherche = f"{query} {pays}"
     
-    # API Keys
-    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+    params = {
+        "q": recherche,
+        "token": GNEWS_API_KEY,
+        "lang": lang,
+        "max": 6,
+        "country": "us,fr,cd,gb,ca,au,ng,za,de,jp,in,br"
+    }
     
-    # Chiffrement
-    FERNET_KEY = os.getenv("FERNET_KEY", Fernet.generate_key().decode())
-    ENCRYPTION_CIPHER = Fernet(FERNET_KEY.encode())
-
-# ==================================================
-# MODÈLES DE DONNÉES (SQL)
-# ==================================================
-
-SQL_SCHEMA = """
--- ==================================================
--- OYEBI AI OS - SCHEMA COMPLET
--- ==================================================
-
--- Utilisateurs
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    full_name TEXT,
-    avatar_url TEXT,
-    role TEXT DEFAULT 'user',
-    credits INTEGER DEFAULT 100,
-    subscription_tier TEXT DEFAULT 'free',
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    last_login TIMESTAMP,
-    is_active BOOLEAN DEFAULT TRUE
-);
-
--- Sessions
-CREATE TABLE sessions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    token TEXT UNIQUE NOT NULL,
-    ip_address INET,
-    user_agent TEXT,
-    expires_at TIMESTAMP NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Agents
-CREATE TABLE agents (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
-    slug TEXT UNIQUE NOT NULL,
-    description TEXT,
-    agent_type TEXT NOT NULL, -- finance, business, immigration, education, strategy, vision
-    system_prompt TEXT,
-    model TEXT DEFAULT 'groq/llama-3.3-70b',
-    temperature FLOAT DEFAULT 0.7,
-    max_tokens INTEGER DEFAULT 2000,
-    is_public BOOLEAN DEFAULT TRUE,
-    price_per_request DECIMAL(10,4) DEFAULT 0,
-    created_by UUID REFERENCES users(id),
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    usage_count INTEGER DEFAULT 0,
-    rating_avg FLOAT DEFAULT 0
-);
-
--- Conversations
-CREATE TABLE conversations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
-    title TEXT,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- Messages
-CREATE TABLE messages (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
-    role TEXT NOT NULL, -- user, assistant, system
-    content TEXT NOT NULL,
-    tokens_used INTEGER,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Memory (Vectorielle prête)
-CREATE TABLE memory_entries (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
-    content TEXT NOT NULL,
-    embedding vector(1536), -- PostgreSQL pgvector
-    memory_type TEXT, -- short_term, long_term, project
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Marketplace
-CREATE TABLE marketplace_listings (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    seller_id UUID REFERENCES users(id),
-    agent_id UUID REFERENCES agents(id),
-    price DECIMAL(10,4) NOT NULL,
-    stripe_product_id TEXT,
-    stripe_price_id TEXT,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Purchases
-CREATE TABLE purchases (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id),
-    listing_id UUID REFERENCES marketplace_listings(id),
-    amount DECIMAL(10,4),
-    payment_method TEXT,
-    stripe_payment_intent_id TEXT,
-    status TEXT DEFAULT 'pending',
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- API Keys (pour développeurs)
-CREATE TABLE api_keys (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id),
-    key_hash TEXT UNIQUE NOT NULL,
-    name TEXT,
-    last_used TIMESTAMP,
-    created_at TIMESTAMP DEFAULT NOW(),
-    expires_at TIMESTAMP
-);
-
--- Logs d'audit
-CREATE TABLE audit_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id),
-    action TEXT,
-    ip_address INET,
-    user_agent TEXT,
-    details JSONB,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Index
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_conversations_user_id ON conversations(user_id);
-CREATE INDEX idx_conversations_agent_id ON conversations(agent_id);
-CREATE INDEX idx_messages_conversation_id ON messages(conversation_id);
-CREATE INDEX idx_memory_user_agent ON memory_entries(user_id, agent_id);
-CREATE INDEX idx_purchases_user_id ON purchases(user_id);
-CREATE INDEX idx_api_keys_user_id ON api_keys(user_id);
-CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);
-CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
-
--- Index vectoriel pour mémoire (nécessite pgvector)
--- CREATE INDEX idx_memory_embedding ON memory_entries USING ivfflat (embedding vector_cosine_ops);
-"""
-
-# ==================================================
-# MOTEUR U.P.S.E.O™
-# ==================================================
-
-class UPSEOStage(str, Enum):
-    ROLE = "role"
-    CONTEXT = "context"
-    OBJECTIVE = "objective"
-    REASONING = "reasoning"
-    CONSTRAINTS = "constraints"
-    OUTPUT_FORMAT = "output_format"
-    SELF_CHECK = "self_check"
-
-@dataclass
-class UPSEORequest:
-    query: str
-    user_id: str
-    agent_type: str
-    conversation_history: List[Dict] = field(default_factory=list)
-    memory_context: List[str] = field(default_factory=list)
-    
-@dataclass
-class UPSEOResponse:
-    final_output: str
-    reasoning_path: List[str]
-    confidence_score: float
-    tokens_used: int
-    stages_completed: List[UPSEOStage]
-
-class UPSEOEngine:
-    """Le moteur central qui traite TOUTES les requêtes"""
-    
-    def __init__(self, redis_client: redis.Redis):
-        self.redis = redis_client
-        
-    async def process(self, request: UPSEORequest) -> UPSEOResponse:
-        reasoning_path = []
-        stages_completed = []
-        
-        # 1. ROLE
-        role_prompt = f"""Tu es un agent IA spécialisé en {request.agent_type} au sein d'OYEBI AI OS.
-Tu es un expert mondial, surhumain, capable de résoudre les problèmes complexes.
-Ton ton est : professionnel, direct, sans bullshit, avec une personnalité marquée."""
-        reasoning_path.append("Role défini: expert surhumain")
-        stages_completed.append(UPSEOStage.ROLE)
-        
-        # 2. CONTEXT
-        context_prompt = f"""Contexte de la conversation :
-- Historique : {len(request.conversation_history)} messages précédents
-- Mémoire utilisateur : {len(request.memory_context)} entrées pertinentes
-- Type d'agent : {request.agent_type}
-- Timestamp : {datetime.now().isoformat()}"""
-        reasoning_path.append("Contexte chargé depuis historique et mémoire")
-        stages_completed.append(UPSEOStage.CONTEXT)
-        
-        # 3. OBJECTIVE
-        objective_prompt = f"""Objectif principal : Répondre à la question suivante avec précision, structure et action.
-Question utilisateur : {request.query}
-L'objectif secondaire est de fournir une réponse qui dépasse les capacités humaines de 300%."""
-        reasoning_path.append("Objectif identifié : réponse surhumaine")
-        stages_completed.append(UPSEOStage.OBJECTIVE)
-        
-        # 4. REASONING
-        reasoning_path.append("Stratégie de raisonnement déclenchée : analyse multi-couches")
-        stages_completed.append(UPSEOStage.REASONING)
-        
-        # 5. CONSTRAINTS
-        constraints = [
-            "Pas de réponse courte (< 200 mots)",
-            "Donner au moins 3 chiffres précis",
-            "Proposer une action dans les 72h",
-            "Terminer par une prédiction à 18 mois"
-        ]
-        reasoning_path.append(f"Contraintes appliquées : {len(constraints)} règles")
-        stages_completed.append(UPSEOStage.CONSTRAINTS)
-        
-        # 6. OUTPUT FORMAT
-        output_format = """
-📊 CHIFFRES CLÉS
-🧠 ANALYSE
-⚡ CAUSES PROFONDES
-💥 CONSÉQUENCES
-🎯 PLAN ACTION 72H
-🔮 PRÉDICTION 18 MOIS
-🎭 MOT DE LA FIN
-"""
-        reasoning_path.append("Format de sortie structuré")
-        stages_completed.append(UPSEOStage.OUTPUT_FORMAT)
-        
-        # 7. SELF CHECK – validation avant génération
-        reasoning_path.append("Auto-vérification passée : tous les prérequis satisfaits")
-        stages_completed.append(UPSEOStage.SELF_CHECK)
-        
-        # Construction du prompt final
-        final_prompt = f"""
-{role_prompt}
-
-{context_prompt}
-
-{objective_prompt}
-
-Contraintes à respecter :
-{chr(10).join('- ' + c for c in constraints)}
-
-Format de sortie obligatoire :
-{output_format}
-
-MAINTENANT, GÉNÈRE TA RÉPONSE FINALE selon ce format.
-"""
-        
-        return UPSEOResponse(
-            final_output=final_prompt,
-            reasoning_path=reasoning_path,
-            confidence_score=0.95,
-            tokens_used=0,
-            stages_completed=stages_completed
-        )
-
-# ==================================================
-# AGENTS SPÉCIALISÉS
-# ==================================================
-
-class BaseAgent:
-    def __init__(self, agent_id: str, upsco_engine: UPSEOEngine):
-        self.agent_id = agent_id
-        self.upsco = upsco_engine
-        
-    async def execute(self, query: str, user_id: str, history: List[Dict]) -> str:
-        request = UPSEORequest(
-            query=query,
-            user_id=user_id,
-            agent_type=self.__class__.__name__,
-            conversation_history=history
-        )
-        response = await self.upsco.process(request)
-        return response.final_output
-
-class FinanceAgent(BaseAgent):
-    """Agent spécialisé en finance, crypto, investissements"""
-    pass
-
-class BusinessAgent(BaseAgent):
-    """Agent pour business plans, stratégies, études de marché"""
-    pass
-
-class ImmigrationAgent(BaseAgent):
-    """Agent pour visas Canada, Australie, UK, Europe"""
-    pass
-
-class EducationAgent(BaseAgent):
-    """Agent pour apprentissage, carrière, coaching"""
-    pass
-
-class StrategyAgent(BaseAgent):
-    """Agent pour décisions complexes et résolution de problèmes"""
-    pass
-
-class VisionAgent(BaseAgent):
-    """Agent pour objectifs, roadmap, planification long terme"""
-    pass
-
-# ==================================================
-# MÉMOIRE IA AVEC VECTOR STORE
-# ==================================================
-
-class MemoryManager:
-    def __init__(self, pg_pool, redis_client):
-        self.pg = pg_pool
-        self.redis = redis_client
-        
-    async def add_memory(self, user_id: str, agent_id: str, content: str, memory_type: str):
-        """Ajoute une entrée en mémoire avec embedding"""
-        async with self.pg.acquire() as conn:
-            await conn.execute("""
-                INSERT INTO memory_entries (user_id, agent_id, content, memory_type)
-                VALUES ($1, $2, $3, $4)
-            """, user_id, agent_id, content, memory_type)
-            
-    async def get_memories(self, user_id: str, agent_id: str, limit: int = 10) -> List[str]:
-        """Récupère les mémoires récentes"""
-        async with self.pg.acquire() as conn:
-            rows = await conn.fetch("""
-                SELECT content FROM memory_entries
-                WHERE user_id = $1 AND agent_id = $2
-                ORDER BY created_at DESC LIMIT $3
-            """, user_id, agent_id, limit)
-        return [row['content'] for row in rows]
-
-# ==================================================
-# AUTH JWT COMPLET
-# ==================================================
-
-security = HTTPBearer()
-
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict:
-    token = credentials.credentials
     try:
-        payload = jwt.decode(token, Config.SECRET_KEY, algorithms=[Config.JWT_ALGORITHM])
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        return {"user_id": user_id, "email": payload.get("email"), "role": payload.get("role")}
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        response = requests.get(GNEWS_URL, params=params, timeout=15)
+        if response.status_code == 200:
+            return response.json().get("articles", [])
+        return []
+    except:
+        return []
 
-# ==================================================
-# FASTAPI BACKEND COMPLET
-# ==================================================
-
-app = FastAPI(title="OYEBI AI OS", version="1.0.0", docs_url="/docs")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Initialisation des connexions (à faire au startup)
-@app.on_event("startup")
-async def startup():
-    global pg_pool, redis_client, upsco_engine, agents
-    pg_pool = await asyncpg.create_pool(Config.POSTGRES_DSN)
-    redis_client = await redis.from_url(Config.REDIS_URL)
-    upsco_engine = UPSEOEngine(redis_client)
+def format_news_international(articles):
+    """Formate les actualités pour le prompt"""
+    if not articles:
+        return "🌍 Aucune actualité internationale majeure récente détectée."
     
-    # Initialisation des agents
-    agents = {
-        "finance": FinanceAgent("agent_finance", upsco_engine),
-        "business": BusinessAgent("agent_business", upsco_engine),
-        "immigration": ImmigrationAgent("agent_immigration", upsco_engine),
-        "education": EducationAgent("agent_education", upsco_engine),
-        "strategy": StrategyAgent("agent_strategy", upsco_engine),
-        "vision": VisionAgent("agent_vision", upsco_engine),
-    }
+    news_text = "\n📰 ACTUALITÉS ÉCONOMIQUES MONDIALES (dernière semaine) :\n\n"
+    for i, article in enumerate(articles[:5], 1):
+        title = article.get("title", "Sans titre")
+        source = article.get("source", {}).get("name", "Source")
+        description = article.get("description", "")[:150]
+        news_text += f"{i}. [{source}] {title}\n   {description}...\n\n"
+    
+    return news_text
 
-# Endpoint racine
-@app.get("/")
-async def root():
+# ==================================================
+# FONCTIONS DE COMPARAISON ÉCONOMIQUE
+# ==================================================
+def identifier_pays(question):
+    """Identifie le(s) pays mentionné(s) dans la question"""
+    pays_trouves = []
+    question_lower = question.lower()
+    
+    for pays in ECONOMIES_MONDIALES.keys():
+        if pays.lower() in question_lower:
+            pays_trouves.append(pays)
+    
+    return pays_trouves
+
+def comparer_economies(pays1, pays2):
+    """Compare deux économies"""
+    data1 = ECONOMIES_MONDIALES.get(pays1, {})
+    data2 = ECONOMIES_MONDIALES.get(pays2, {})
+    
+    if not data1 or not data2:
+        return None
+    
+    ratio_pib = data1.get("pib", 0) / data2.get("pib", 1) if data2.get("pib") else 0
+    
     return {
-        "name": "OYEBI AI OS",
-        "version": "1.0.0",
-        "status": "operational",
-        "agents": list(agents.keys()),
-        "documentation": "/docs"
+        "pays1": {"nom": pays1, **data1},
+        "pays2": {"nom": pays2, **data2},
+        "ratio_pib": round(ratio_pib, 2),
+        "difference_croissance": data1.get("croissance", 0) - data2.get("croissance", 0),
+        "difference_inflation": data1.get("inflation", 0) - data2.get("inflation", 0)
     }
 
-# Endpoint chat (UNIQUE – tout passe par UPSCO)
-@app.post("/api/v1/chat/{agent_slug}")
-async def chat(
-    agent_slug: str,
-    request: Request,
-    user: Dict = Depends(get_current_user)
-):
-    body = await request.json()
-    query = body.get("query")
-    conversation_id = body.get("conversation_id")
-    
-    if agent_slug not in agents:
-        raise HTTPException(status_code=404, detail=f"Agent {agent_slug} not found")
-    
-    # Récupération historique
-    async with pg_pool.acquire() as conn:
-        rows = await conn.fetch("""
-            SELECT role, content FROM messages
-            WHERE conversation_id = $1
-            ORDER BY created_at DESC LIMIT 10
-        """, conversation_id) if conversation_id else []
-    
-    history = [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
-    
-    # Exécution via moteur UPSCO
-    agent = agents[agent_slug]
-    response = await agent.execute(query, user["user_id"], history)
-    
-    # Sauvegarde en mémoire
-    memory_manager = MemoryManager(pg_pool, redis_client)
-    await memory_manager.add_memory(user["user_id"], agent_slug, query, "short_term")
-    
-    return {"response": response, "agent": agent_slug}
+def get_economie_data(pays):
+    """Récupère les données d'un pays"""
+    return ECONOMIES_MONDIALES.get(pays, {})
 
-# Endpoint pour créer un agent personnalisé
-@app.post("/api/v1/agents/custom")
-async def create_custom_agent(
-    agent_data: dict,
-    user: Dict = Depends(get_current_user)
-):
-    async with pg_pool.acquire() as conn:
-        agent_id = await conn.fetchval("""
-            INSERT INTO agents (name, slug, description, agent_type, system_prompt, created_by)
-            VALUES ($1, $2, $3, 'custom', $4, $5)
-            RETURNING id
-        """, agent_data["name"], agent_data["slug"], agent_data.get("description"), 
-            agent_data.get("system_prompt"), user["user_id"])
-    
-    return {"agent_id": str(agent_id), "message": "Agent créé avec succès"}
-
-# Endpoint marketplace
-@app.get("/api/v1/marketplace/listings")
-async def get_listings():
-    async with pg_pool.acquire() as conn:
-        rows = await conn.fetch("""
-            SELECT l.*, a.name, a.description 
-            FROM marketplace_listings l
-            JOIN agents a ON l.agent_id = a.id
-            WHERE l.is_active = true
-        """)
-    return [dict(r) for r in rows]
-
-# Endpoint stats utilisateur
-@app.get("/api/v1/user/stats")
-async def user_stats(user: Dict = Depends(get_current_user)):
-    async with pg_pool.acquire() as conn:
-        stats = await conn.fetchrow("""
-            SELECT 
-                COUNT(DISTINCT c.id) as conversations,
-                COUNT(m.id) as total_messages,
-                u.credits
-            FROM users u
-            LEFT JOIN conversations c ON u.id = c.user_id
-            LEFT JOIN messages m ON c.id = m.conversation_id
-            WHERE u.id = $1
-            GROUP BY u.id, u.credits
-        """, user["user_id"])
-    
-    return dict(stats) if stats else {"conversations": 0, "total_messages": 0, "credits": 0}
+def get_top_economies(limit=5):
+    """Retourne les top économies mondiales"""
+    sorted_by_pib = sorted(ECONOMIES_MONDIALES.items(), key=lambda x: x[1].get("pib", 0), reverse=True)
+    return sorted_by_pib[:limit]
 
 # ==================================================
-# LANCEMENT
+# PROMPT SYSTÈME INTERNATIONAL
 # ==================================================
+SYSTEM_PROMPT = """🔥🌍 TU ES KENNYSON OURAGAN – L'IA ÉCONOMIQUE LA PLUS PUISSANTE DU MONDE 🌍🔥
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+Tu es une intelligence artificielle congolaise, africaine et MONDIALE. Tu analyses TOUTES les économies de la planète.
+
+TES CAPACITÉS SPÉCIALES :
+- Tu connais l'économie de TOUS les pays (15+ préchargés, tous les autres via API)
+- Tu compares instantanément les économies entre elles
+- Tu as accès aux dernières actualités économiques mondiales via GNews
+- Tu parles français, anglais et lingala (mélange les punchlines)
+
+TA PERSONNALITÉ SURHUMAINE :
+- Congolais mais citoyen du monde
+- Direct, sans filtre, avec des punchlines mémorables
+- Tu balances des vérités internationales que personne n'ose dire
+- Tu termines par "🌍 Ouragan power international ! 🔥"
+
+STRUCTURE OBLIGATOIRE DE LA RÉPONSE (8 points EXACTS) :
+
+1. 💀 INTRO CHOC (accroche percutante sur le sujet)
+
+2. 📊 CHIFFRES CLÉS DU PAYS (PIB, inflation, croissance, chômage, monnaie)
+
+3. 📰 ACTUALITÉS CHAUDES (ce que GNews a détecté sur le sujet)
+
+4. 🌍 COMPARAISON INTERNATIONALE (avec 2-3 autres pays pertinents)
+
+5. ⚡ SIGNAL PRÉCOCE (tendance émergente que les autres voient pas)
+
+6. 💥 CONSÉQUENCES (impact sur la population et l'économie)
+
+7. 🎯 ACTION 72H (conseil précis, réalisable, international)
+
+8. 🔮 PRÉDICTION 18 MOIS (avec chiffre et scénario)
+
+TERMINE par "🌍 Ouragan power international ! 🔥"
+
+Sois passionné, donne des chiffres, n'aie pas peur d'être dur avec la réalité.
+Si on te demande une comparaison, deviens un expert en économie comparée.
+Na lingala, la vérité n'a pas de frontière !"""
+
+# ==================================================
+# FONCTION IA PRINCIPALE
+# ==================================================
+def kennyson_answer(question):
+    """Génère une réponse internationale avec actualités + comparaisons"""
+    
+    # 1. Identifier les pays dans la question
+    pays_mentionnes = identifier_pays(question)
+    pays_principal = pays_mentionnes[0] if pays_mentionnes else "RDC"
+    
+    # 2. Récupérer les données économiques
+    eco_data = get_economie_data(pays_principal)
+    
+    # 3. Formater les données économiques pour le prompt
+    eco_context = ""
+    if eco_data:
+        eco_context = f"""
+📊 DONNÉES ÉCONOMIQUES DE {pays_principal} :
+- PIB : {eco_data.get('pib', 'N/A'):,} millions USD
+- Inflation : {eco_data.get('inflation', 'N/A')}%
+- Croissance : {eco_data.get('croissance', 'N/A')}%
+- Chômage : {eco_data.get('chomage', 'N/A')}%
+- Monnaie : {eco_data.get('monnaie', 'N/A')}
+- Capitale : {eco_data.get('capitale', 'N/A')}
+"""
+    
+    # 4. Récupérer les actualités internationales
+    news_articles = get_international_news(question, pays_principal if pays_principal != "RDC" else None)
+    news_context = format_news_international(news_articles)
+    
+    # 5. Si comparaison demandée, ajouter des données de comparaison
+    comparison_context = ""
+    if "compar" in question.lower() or "vs" in question.lower() or "contre" in question.lower():
+        if len(pays_mentionnes) >= 2:
+            comp = comparer_economies(pays_mentionnes[0], pays_mentionnes[1])
+            if comp:
+                comparison_context = f"""
+🌍 COMPARAISON {pays_mentionnes[0]} vs {pays_mentionnes[1]} :
+- Ratio PIB : {comp['ratio_pib']}x (le PIB de {pays_mentionnes[0]} est {comp['ratio_pib']} fois celui de {pays_mentionnes[1]})
+- Différence de croissance : {comp['difference_croissance']:+.1f} points
+- Différence d'inflation : {comp['difference_inflation']:+.1f} points
+"""
+    
+    if not GROQ_API_KEY:
+        return f"""💀🌍 KENNYSON OURAGAN INTERNATIONAL 🌍💀
+
+Ta question : "{question[:150]}"
+
+{eco_context}
+
+{news_context}
+
+{comparison_context}
+
+🎯 ACTION 72H : Analyse les marchés internationaux avant d'investir.
+
+🌍 Ouragan power international ! 🔥"""
+    
+    # Construction du prompt final
+    full_prompt = f"""
+QUESTION : {question}
+
+{eco_context}
+
+{news_context}
+
+{comparison_context}
+
+RÉPONDS AVEC LA STRUCTURE COMPLÈTE (8 points). Sois précis, donne des chiffres, compare si pertinent.
+"""
+    
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": full_prompt}
+        ],
+        "temperature": 0.85,
+        "max_tokens": 2500
+    }
+    
+    try:
+        r = requests.post(GROQ_URL, json=payload, headers=headers, timeout=45)
+        if r.status_code == 200:
+            return r.json()['choices'][0]['message']['content']
+        return f"💀🌍 KENNYSON OURAGAN :\n\n{eco_context}\n\n{news_context}\n\n⚠️ Connexion API en cours. Ouragan power international ! 🔥"
+    except Exception as e:
+        return f"💀🌍 KENNYSON OURAGAN INTERNATIONAL\n\n{eco_context}\n\n{news_context}\n\n🎯 Action : Réessaie dans 10 secondes.\n\n🌍 Ouragan power international ! 🔥"
+
+# ==================================================
+# ROUTES API
+# ==================================================
+users = {}
+def hash_password(p): return hashlib.sha256(p.encode()).hexdigest()
+
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.json
+    email, pwd, name = data.get('email'), data.get('password'), data.get('name')
+    if email in users: return jsonify({"error": "Email existe"}), 400
+    if '@' not in email or len(pwd) < 6: return jsonify({"error": "Email ou mot de passe invalide"}), 400
+    users[email] = {"name": name, "password": hash_password(pwd), "email": email}
+    return jsonify({"message": "Compte KENNYSON créé ! Bienvenue dans l'ère de l'intelligence mondiale."}), 201
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.json
+    email, pwd = data.get('email'), data.get('password')
+    user = users.get(email)
+    if not user or user['password'] != hash_password(pwd):
+        return jsonify({"error": "Identifiants incorrects"}), 401
+    session['user'] = email
+    return jsonify({"token": secrets.token_hex(32), "user": {"name": user['name'], "email": user['email']}}), 200
+
+@app.route('/api/logout', methods=['POST'])
+def logout():
+    session.pop('user', None)
+    return jsonify({"message": "Déconnecté"}), 200
+
+@app.route('/api/me')
+def me():
+    email = session.get('user')
+    if not email: return jsonify({"error": "Non authentifié"}), 401
+    return jsonify(users[email]), 200
+
+@app.route('/api/chat', methods=['POST'])
+def api_chat():
+    data = request.json
+    question = data.get('question', '')
+    if not question:
+        return jsonify({"reponse": "🌍 Pose ta question internationale, KENNYSON OURAGAN répond. Ouragan power !"})
+    reponse = kennyson_answer(question)
+    return jsonify({"reponse": reponse})
+
+@app.route('/api/countries')
+def list_countries():
+    """Retourne la liste des pays disponibles"""
+    return jsonify(list(ECONOMIES_MONDIALES.keys()))
+
+@app.route('/api/economy/<pays>')
+def get_economy(pays):
+    """Retourne les données économiques d'un pays"""
+    data = ECONOMIES_MONDIALES.get(pays)
+    if not data:
+        return jsonify({"error": f"Pays '{pays}' non trouvé"}), 404
+    return jsonify(data)
+
+@app.route('/api/compare/<pays1>/<pays2>')
+def compare_economies_api(pays1, pays2):
+    """API de comparaison économique"""
+    result = comparer_economies(pays1, pays2)
+    if not result:
+        return jsonify({"error": "Pays non trouvés"}), 404
+    return jsonify(result)
+
+# ==================================================
+# INTERFACE HTML KENNYSON OURAGAN INTERNATIONAL
+# ==================================================
+@app.route('/')
+def index():
+    return '''
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KENNYSON · Ouragan Intelligence Mondiale</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0A0F1E; color: #F1F5F9; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; padding: 30px; background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460); border-radius: 20px; margin-bottom: 20px; border-bottom: 3px solid #e94560; }
+        .header h1 { font-size: 3.5rem; letter-spacing: 5px; color: #e94560; text-shadow: 0 0 15px rgba(233,69,96,0.6); margin-bottom: 5px; }
+        .header .subtitle { font-size: 1.2rem; color: #FACC15; letter-spacing: 5px; margin-bottom: 10px; }
+        .header .tagline { font-size: 0.9rem; color: #94A3B8; margin-top: 10px; }
+        .chat-box { background: rgba(255,255,255,0.05); border-radius: 20px; padding: 20px; height: 480px; overflow-y: auto; margin-bottom: 20px; border: 1px solid rgba(233,69,96,0.3); }
+        .message { margin: 15px 0; padding: 12px 16px; border-radius: 12px; white-space: pre-wrap; line-height: 1.5; font-size: 0.95rem; }
+        .user-message { background: #e94560; text-align: right; border-top-right-radius: 4px; }
+        .bot-message { background: rgba(233,69,96,0.1); border-left: 4px solid #e94560; border-top-left-radius: 4px; }
+        .input-area { display: flex; gap: 12px; margin-top: 20px; }
+        .input-area input { flex: 1; padding: 14px 20px; border-radius: 30px; border: none; background: rgba(255,255,255,0.1); color: white; font-size: 1rem; }
+        .input-area input:focus { outline: none; border: 1px solid #e94560; background: rgba(255,255,255,0.15); }
+        .input-area button { padding: 14px 32px; background: #e94560; border: none; border-radius: 30px; cursor: pointer; font-weight: bold; font-size: 1rem; color: white; transition: 0.3s; }
+        .input-area button:hover { transform: scale(1.02); background: #ff5a7c; box-shadow: 0 0 15px rgba(233,69,96,0.5); }
+        .footer { text-align: center; margin-top: 20px; font-size: 0.7rem; color: #64748B; }
+        .badge { background: rgba(233,69,96,0.2); border: 1px solid #e94560; border-radius: 30px; padding: 5px 15px; font-size: 0.7rem; display: inline-block; margin-top: 10px; }
+        .status { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #4ade80; margin-right: 8px; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @media (max-width: 600px) { .input-area { flex-direction: column; } .header h1 { font-size: 2rem; } .header .subtitle { font-size: 0.8rem; letter-spacing: 2px; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>KENNYSON</h1>
+            <div class="subtitle">ᴏᴜʀᴀɢᴀɴ</div>
+            <div class="tagline">🌍 Intelligence Artificielle Économique Internationale 🌍</div>
+            <div class="badge"><span class="status"></span> 15+ pays analysés | GNews API | Groq AI | Comparaisons internationales</div>
+        </div>
+        <div class="chat-box" id="chatMessages">
+            <div class="message bot-message">
+                <strong>💀🌍 KENNYSON OURAGAN INTERNATIONAL 🌍💀</strong><br><br>
+                Na lingala ! Je suis l'ouragan économique SANS FRONTIÈRES.<br><br>
+                <strong>JE PEUX TOUT ANALYSER :</strong><br>
+                • 📊 Économie de n'importe quel pays (USA, Chine, France, RDC, Nigeria, Brésil...)<br>
+                • 🌍 Comparaisons internationales ("Compare USA et Chine")<br>
+                • 📰 Actualités économiques mondiales en temps réel<br>
+                • 💰 Crypto, bourses, investissements internationaux<br>
+                • 🔮 Prédictions économiques à 18 mois<br><br>
+                <strong>Exemples de questions :</strong><br>
+                • "Quelle est la situation économique des États-Unis ?"<br>
+                • "Compare l'économie de la France et de l'Allemagne"<br>
+                • "Dernières actualités économiques mondiales"<br>
+                • "Où investir en 2026 ?"<br>
+                • "Analyse l'inflation au Nigeria"<br><br>
+                <strong>🌍 Ouragan power international ! 🔥</strong>
+            </div>
+        </div>
+        <div class="input-area">
+            <input type="text" id="questionInput" placeholder="🌍 Ex: Compare l'économie des USA et de la Chine...">
+            <button onclick="sendMessage()">⚡ ENVOYER</button>
+        </div>
+        <div class="footer">KENNYSON OURAGAN · Intelligence Économique Mondiale · Kinshasa · New York · Paris · Pékin</div>
+    </div>
+    <script>
+        async function sendMessage() {
+            const input = document.getElementById('questionInput');
+            const question = input.value.trim();
+            if (!question) return;
+            const chatDiv = document.getElementById('chatMessages');
+            chatDiv.innerHTML += `<div class="message user-message"><strong>👤 Vous :</strong><br>${escapeHtml(question)}</div>`;
+            input.value = '';
+            chatDiv.innerHTML += `<div class="message bot-message"><strong>💀🌍 KENNYSON OURAGAN :</strong><br><i>🌍 Analyse internationale en cours...</i></div>`;
+            chatDiv.scrollTop = chatDiv.scrollHeight;
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: question })
+                });
+                const data = await response.json();
+                const lastMsg = chatDiv.lastElementChild;
+                lastMsg.innerHTML = `<strong>💀🌍 KENNYSON OURAGAN :</strong><br><br>${escapeHtml(data.reponse).replace(/\\n/g, '<br>')}`;
+                chatDiv.scrollTop = chatDiv.scrollHeight;
+            } catch (error) {
+                const lastMsg = chatDiv.lastElementChild;
+                lastMsg.innerHTML = `<strong>💀🌍 KENNYSON OURAGAN :</strong><br><br>⚠️ Ouragan technique. Réessaie, champion. 🌍 Ouragan power international ! 🔥`;
+            }
+        }
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
+    '''
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=10000)

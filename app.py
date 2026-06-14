@@ -1,24 +1,13 @@
-from flask import Flask, jsonify, request, session, send_file
-from flask_cors import CORS
+from flask import Flask, jsonify, request, session
 import hashlib
 import secrets
 import requests
 import os
-import json
 import sqlite3
-import io
-import base64
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 from datetime import datetime
-import pandas as pd
-import re
 
 app = Flask(__name__)
-CORS(app)
-app.secret_key = 'kennyson_chatgpt_complete_secret_2026'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+app.secret_key = 'kennyson_render_ready_2026'
 
 # ==================================================
 # BASE DE DONNÉES
@@ -26,143 +15,113 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 def init_db():
     conn = sqlite3.connect('kennyson_memory.db')
     c = conn.cursor()
-    
-    # Utilisateurs
-    c.execute('''CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE,
-        password TEXT,
-        name TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
-    
-    # Conversations
     c.execute('''CREATE TABLE IF NOT EXISTS conversations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        title TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        user_id TEXT,
+        question TEXT,
+        reponse TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     )''')
-    
-    # Messages
-    c.execute('''CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        conversation_id INTEGER,
-        role TEXT,
-        content TEXT,
-        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
-    
-    # Paramètres utilisateur
-    c.execute('''CREATE TABLE IF NOT EXISTS user_settings (
-        user_id INTEGER PRIMARY KEY,
-        temperature REAL DEFAULT 0.7,
-        max_tokens INTEGER DEFAULT 1000,
-        style TEXT DEFAULT 'équilibré',
-        search_enabled BOOLEAN DEFAULT 0,
-        code_enabled BOOLEAN DEFAULT 0
-    )''')
-    
-    # Uploads
-    c.execute('''CREATE TABLE IF NOT EXISTS uploads (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        filename TEXT,
-        content TEXT,
-        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
-    
     conn.commit()
     conn.close()
 
 init_db()
 
 # ==================================================
-# CONFIGURATION API
+# API GRATUITES (sans clé ou avec clé si dispo)
 # ==================================================
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
 GNEWS_API_KEY = os.environ.get('GNEWS_API_KEY', '')
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-# ==================================================
-# SERVICES API
-# ==================================================
 def get_worldbank_gdp():
     try:
-        r = requests.get("http://api.worldbank.org/v2/country/CD/indicator/NY.GDP.MKTP.CD?format=json", timeout=10)
+        r = requests.get("http://api.worldbank.org/v2/country/CD/indicator/NY.GDP.MKTP.CD?format=json", timeout=8)
         if r.status_code == 200:
             data = r.json()
-            if len(data) > 1 and data[1]:
-                return f"PIB RDC: {int(float(data[1][0]['value'])):,} USD"
-    except: pass
+            if len(data) > 1 and data[1] and data[1][0].get('value'):
+                return f"📊 PIB RDC: {int(float(data[1][0]['value'])):,} USD"
+    except:
+        pass
     return None
 
 def get_crypto_price():
     try:
-        r = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd", timeout=10)
+        r = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd", timeout=8)
         if r.status_code == 200:
-            return f"Bitcoin: ${r.json()['bitcoin']['usd']:,} USD"
-    except: pass
+            return f"💰 Bitcoin: ${r.json()['bitcoin']['usd']:,} USD"
+    except:
+        pass
     return None
 
 def get_weather():
     try:
-        r = requests.get("https://api.open-meteo.com/v1/forecast?latitude=-4.325&longitude=15.322&current_weather=true", timeout=10)
+        r = requests.get("https://api.open-meteo.com/v1/forecast?latitude=-4.325&longitude=15.322&current_weather=true", timeout=8)
         if r.status_code == 200:
-            return f"Kinshasa: {r.json()['current_weather']['temperature']}°C"
-    except: pass
+            return f"🌤️ Kinshasa: {r.json()['current_weather']['temperature']}°C"
+    except:
+        pass
     return None
 
-def search_news(query):
-    if not GNEWS_API_KEY: return None
+def search_news():
+    if not GNEWS_API_KEY:
+        return None
     try:
-        r = requests.get(f"https://gnews.io/api/v4/search?q={query}&token={GNEWS_API_KEY}&lang=fr&max=3", timeout=10)
+        r = requests.get(f"https://gnews.io/api/v4/search?q=économie&token={GNEWS_API_KEY}&lang=fr&max=2", timeout=8)
         if r.status_code == 200:
             articles = r.json().get('articles', [])
             if articles:
                 result = "📰 ACTUALITÉS:\n"
-                for a in articles[:3]:
-                    result += f"- {a['title']}\n"
+                for a in articles[:2]:
+                    result += f"- {a.get('title', '')}\n"
                 return result
-    except: pass
+    except:
+        pass
     return None
 
 # ==================================================
 # IA CENTRALE
 # ==================================================
-SYSTEM_PROMPT = """Tu es KENNYSON OURAGAN, un assistant intelligent de niveau ChatGPT.
-Sois utile, précis, naturel. Structure tes réponses en paragraphes.
-Tu peux aider sur: économie, météo, crypto, définitions, actualités, code, analyse de fichiers.
-Réponds en français."""
+SYSTEM_PROMPT = """Tu es KENNYSON OURAGAN, un assistant intelligent.
+Sois utile, précis, naturel. Réponds en français en 2-3 paragraphes.
+Tu peux aider sur: économie, météo, crypto, définitions, actualités."""
 
-def kennyson_answer(question, user_id=None):
+def kennyson_answer(question):
     external = ""
     q = question.lower()
     
-    if "pib" in q: external = get_worldbank_gdp()
-    if "bitcoin" in q or "crypto" in q: external = get_crypto_price()
-    if "météo" in q or "temps" in q: external = get_weather()
-    if "actualité" in q or "news" in q: external = search_news(question)
+    if "pib" in q or "économie" in q:
+        ext = get_worldbank_gdp()
+        if ext: external += ext + "\n\n"
+    if "bitcoin" in q or "crypto" in q:
+        ext = get_crypto_price()
+        if ext: external += ext + "\n\n"
+    if "météo" in q or "temps" in q:
+        ext = get_weather()
+        if ext: external += ext + "\n\n"
+    if "actualité" in q or "news" in q:
+        ext = search_news()
+        if ext: external += ext + "\n\n"
     
     if not GROQ_API_KEY:
-        return external or "KENNYSON OURAGAN: Ajoute ta clé Groq."
+        return external or "KENNYSON OURAGAN est prêt. Ajoute ta clé Groq dans les variables Render."
     
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     payload = {
         "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": question}],
         "temperature": 0.7,
-        "max_tokens": 1000
+        "max_tokens": 800
     }
     
     try:
-        r = requests.post(GROQ_URL, json=payload, headers=headers, timeout=45)
+        r = requests.post(GROQ_URL, json=payload, headers=headers, timeout=35)
         if r.status_code == 200:
             rep = r.json()['choices'][0]['message']['content']
-            return f"{external}\n\n{rep}" if external else rep
-    except: pass
-    
-    return external or "KENNYSON OURAGAN prêt. Reformulez votre question."
+            return f"{external}\n{rep}" if external else rep
+        return external or "Je rencontre une difficulté. Veuillez réessayer."
+    except:
+        return external or "KENNYSON OURAGAN prêt. Reformulez votre question."
 
 # ==================================================
 # ROUTES API
@@ -170,15 +129,16 @@ def kennyson_answer(question, user_id=None):
 @app.route('/api/chat', methods=['POST'])
 def chat():
     data = request.json
-    reponse = kennyson_answer(data.get('question', ''))
+    question = data.get('question', '')
+    reponse = kennyson_answer(question)
     return jsonify({"reponse": reponse})
 
 @app.route('/api/health')
 def health():
-    return jsonify({"status": "online", "version": "ChatGPT-Complete", "groq": bool(GROQ_API_KEY)})
+    return jsonify({"status": "online", "groq": bool(GROQ_API_KEY), "gnews": bool(GNEWS_API_KEY)})
 
 # ==================================================
-# FRONTEND COMPLET
+# FRONTEND STYLE CHATGPT
 # ==================================================
 HTML = '''
 <!DOCTYPE html>
@@ -215,7 +175,7 @@ HTML = '''
 <div class="app">
     <div class="header">
         <div class="logo">🔥 KENNYSON OURAGAN</div>
-        <div style="font-size:12px; color:#8e8ea0;">Agent IA · Version ChatGPT</div>
+        <div style="font-size:12px; color:#8e8ea0;">Agent IA · Version Render Ready</div>
     </div>
     <div class="chat-container" id="chat"></div>
     <div class="input-area">
@@ -229,7 +189,7 @@ HTML = '''
             <div class="suggestion" data-q="Météo à Kinshasa">🌤️ Météo</div>
             <div class="suggestion" data-q="Actualités économiques">📰 Actualités</div>
         </div>
-        <div class="footer">KENNYSON OURAGAN · Agent IA · Gratuit</div>
+        <div class="footer">KENNYSON OURAGAN · Agent IA · Gratuit · Render Ready</div>
     </div>
 </div>
 <script>
@@ -251,16 +211,21 @@ async function send() {
     addMessage(q, 'user');
     input.value = '';
     addMessage('<div class="typing"><span>●</span><span>●</span><span>●</span></div>', 'bot');
-    const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q }) });
-    const data = await res.json();
-    chat.lastChild.remove();
-    addMessage(data.reponse, 'bot');
+    try {
+        const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q }) });
+        const data = await res.json();
+        chat.lastChild.remove();
+        addMessage(data.reponse, 'bot');
+    } catch(e) {
+        chat.lastChild.remove();
+        addMessage("Erreur technique. Veuillez réessayer.", 'bot');
+    }
 }
 
 sendBtn.onclick = send;
 input.onkeypress = (e) => { if(e.key === 'Enter') { e.preventDefault(); send(); } };
 document.querySelectorAll('.suggestion').forEach(s => { s.onclick = () => { input.value = s.dataset.q; send(); }; });
-addMessage('Bonjour ! Je suis KENNYSON OURAGAN, agent IA concurrent de ChatGPT. Posez-moi vos questions sur économie, crypto, météo, actualités...', 'bot');
+addMessage('Bonjour ! Je suis KENNYSON OURAGAN, agent IA compatible Render. Posez-moi vos questions sur économie, crypto, météo, actualités...', 'bot');
 </script>
 </body>
 </html>

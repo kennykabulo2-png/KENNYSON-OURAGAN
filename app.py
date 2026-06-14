@@ -12,53 +12,46 @@ app.secret_key = 'kennyson_ouragan_secret_2026'
 # CONFIGURATIONS API
 # ==================================================
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
-GNEWS_API_KEY = os.environ.get('GNEWS_API_KEY', '50627028ad0739bffdf75505815cfeae')
+GNEWS_API_KEY = os.environ.get('GNEWS_API_KEY', '')
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GNEWS_URL = "https://gnews.io/api/v4/search"
 
 # ==================================================
-# BASE DE DONNÉES ÉCONOMIQUE MONDIALE (15+ pays)
+# BASE DE DONNÉES ÉCONOMIQUE MONDIALE
 # ==================================================
 ECONOMIES_MONDIALES = {
-    "États-Unis": {"code": "US", "pib": 25400000, "inflation": 3.2, "croissance": 2.1, "monnaie": "$", "chomage": 3.8, "capitale": "Washington"},
-    "Chine": {"code": "CN", "pib": 17800000, "inflation": 1.8, "croissance": 5.2, "monnaie": "¥", "chomage": 5.0, "capitale": "Pékin"},
-    "France": {"code": "FR", "pib": 2780000, "inflation": 2.5, "croissance": 1.8, "monnaie": "€", "chomage": 7.2, "capitale": "Paris"},
-    "RDC": {"code": "CD", "pib": 65000, "inflation": 18.5, "croissance": 4.5, "monnaie": "FC", "chomage": 22.0, "capitale": "Kinshasa"},
-    "Nigeria": {"code": "NG", "pib": 440000, "inflation": 24.5, "croissance": 2.9, "monnaie": "₦", "chomage": 33.0, "capitale": "Abuja"},
-    "Afrique du Sud": {"code": "ZA", "pib": 419000, "inflation": 5.5, "croissance": 1.2, "monnaie": "R", "chomage": 32.0, "capitale": "Pretoria"},
-    "Brésil": {"code": "BR", "pib": 1920000, "inflation": 4.6, "croissance": 2.5, "monnaie": "R$", "chomage": 8.5, "capitale": "Brasilia"},
-    "Inde": {"code": "IN", "pib": 3730000, "inflation": 5.2, "croissance": 6.5, "monnaie": "₹", "chomage": 6.8, "capitale": "New Delhi"},
-    "Allemagne": {"code": "DE", "pib": 4080000, "inflation": 2.1, "croissance": 1.5, "monnaie": "€", "chomage": 3.1, "capitale": "Berlin"},
-    "Japon": {"code": "JP", "pib": 4230000, "inflation": 1.5, "croissance": 1.8, "monnaie": "¥", "chomage": 2.6, "capitale": "Tokyo"},
-    "Royaume-Uni": {"code": "GB", "pib": 3070000, "inflation": 2.8, "croissance": 1.9, "monnaie": "£", "chomage": 4.0, "capitale": "Londres"},
-    "Canada": {"code": "CA", "pib": 2140000, "inflation": 2.4, "croissance": 2.2, "monnaie": "C$", "chomage": 5.1, "capitale": "Ottawa"},
-    "Australie": {"code": "AU", "pib": 1690000, "inflation": 2.6, "croissance": 2.3, "monnaie": "A$", "chomage": 3.7, "capitale": "Canberra"},
-    "Russie": {"code": "RU", "pib": 2240000, "inflation": 6.5, "croissance": 1.1, "monnaie": "₽", "chomage": 3.9, "capitale": "Moscou"},
-    "Turquie": {"code": "TR", "pib": 1080000, "inflation": 45.0, "croissance": 3.5, "monnaie": "₺", "chomage": 10.2, "capitale": "Ankara"},
-    "Maroc": {"code": "MA", "pib": 142000, "inflation": 2.8, "croissance": 3.2, "monnaie": "DH", "chomage": 12.0, "capitale": "Rabat"},
-    "Kenya": {"code": "KE", "pib": 113000, "inflation": 5.8, "croissance": 5.0, "monnaie": "KSh", "chomage": 7.5, "capitale": "Nairobi"},
-    "Angola": {"code": "AO", "pib": 106000, "inflation": 15.2, "croissance": 3.0, "monnaie": "Kz", "chomage": 30.0, "capitale": "Luanda"},
+    "États-Unis": {"code": "US", "pib": 25400000, "inflation": 3.2, "croissance": 2.1, "monnaie": "$", "chomage": 3.8},
+    "Chine": {"code": "CN", "pib": 17800000, "inflation": 1.8, "croissance": 5.2, "monnaie": "¥", "chomage": 5.0},
+    "France": {"code": "FR", "pib": 2780000, "inflation": 2.5, "croissance": 1.8, "monnaie": "€", "chomage": 7.2},
+    "RDC": {"code": "CD", "pib": 65000, "inflation": 18.5, "croissance": 4.5, "monnaie": "FC", "chomage": 22.0},
+    "Nigeria": {"code": "NG", "pib": 440000, "inflation": 24.5, "croissance": 2.9, "monnaie": "₦", "chomage": 33.0},
+    "Afrique du Sud": {"code": "ZA", "pib": 419000, "inflation": 5.5, "croissance": 1.2, "monnaie": "R", "chomage": 32.0},
+    "Brésil": {"code": "BR", "pib": 1920000, "inflation": 4.6, "croissance": 2.5, "monnaie": "R$", "chomage": 8.5},
+    "Inde": {"code": "IN", "pib": 3730000, "inflation": 5.2, "croissance": 6.5, "monnaie": "₹", "chomage": 6.8},
+    "Allemagne": {"code": "DE", "pib": 4080000, "inflation": 2.1, "croissance": 1.5, "monnaie": "€", "chomage": 3.1},
+    "Japon": {"code": "JP", "pib": 4230000, "inflation": 1.5, "croissance": 1.8, "monnaie": "¥", "chomage": 2.6},
+    "Royaume-Uni": {"code": "GB", "pib": 3070000, "inflation": 2.8, "croissance": 1.9, "monnaie": "£", "chomage": 4.0},
+    "Canada": {"code": "CA", "pib": 2140000, "inflation": 2.4, "croissance": 2.2, "monnaie": "C$", "chomage": 5.1},
+    "Australie": {"code": "AU", "pib": 1690000, "inflation": 2.6, "croissance": 2.3, "monnaie": "A$", "chomage": 3.7},
+    "Russie": {"code": "RU", "pib": 2240000, "inflation": 6.5, "croissance": 1.1, "monnaie": "₽", "chomage": 3.9},
+    "Turquie": {"code": "TR", "pib": 1080000, "inflation": 45.0, "croissance": 3.5, "monnaie": "₺", "chomage": 10.2},
 }
 
 # ==================================================
-# FONCTIONS GNEWS (INTERNATIONAL)
+# FONCTIONS GNEWS
 # ==================================================
-def get_international_news(query, pays=None, lang="fr"):
-    """Récupère actualités économiques internationales"""
+def get_international_news(query, pays=None):
     if not GNEWS_API_KEY:
         return []
     
-    recherche = f"{query}"
-    if pays:
-        recherche = f"{query} {pays}"
-    
+    recherche = f"{query} {pays}" if pays else query
     params = {
         "q": recherche,
         "token": GNEWS_API_KEY,
-        "lang": lang,
-        "max": 6,
-        "country": "us,fr,cd,gb,ca,au,ng,za,de,jp,in,br"
+        "lang": "fr",
+        "max": 5,
+        "country": "us,fr,cd,gb,ca,ng,za,de"
     }
     
     try:
@@ -69,196 +62,78 @@ def get_international_news(query, pays=None, lang="fr"):
     except:
         return []
 
-def format_news_international(articles):
-    """Formate les actualités pour le prompt"""
+def format_news(articles):
     if not articles:
-        return "🌍 Aucune actualité internationale majeure récente détectée."
+        return "📭 Aucune actualité récente majeure détectée."
     
-    news_text = "\n📰 ACTUALITÉS ÉCONOMIQUES MONDIALES (dernière semaine) :\n\n"
-    for i, article in enumerate(articles[:5], 1):
-        title = article.get("title", "Sans titre")
-        source = article.get("source", {}).get("name", "Source")
-        description = article.get("description", "")[:150]
-        news_text += f"{i}. [{source}] {title}\n   {description}...\n\n"
-    
-    return news_text
+    text = "\n📰 **ACTUALITÉS ÉCONOMIQUES RÉCENTES :**\n\n"
+    for i, a in enumerate(articles[:4], 1):
+        text += f"{i}. **{a.get('title', 'Sans titre')}**\n   📍 {a.get('source', {}).get('name', 'Source')}\n   📝 {a.get('description', '')[:120]}...\n\n"
+    return text
 
 # ==================================================
-# FONCTIONS DE COMPARAISON ÉCONOMIQUE
+# FONCTION IA
 # ==================================================
-def identifier_pays(question):
-    """Identifie le(s) pays mentionné(s) dans la question"""
-    pays_trouves = []
-    question_lower = question.lower()
-    
-    for pays in ECONOMIES_MONDIALES.keys():
-        if pays.lower() in question_lower:
-            pays_trouves.append(pays)
-    
-    return pays_trouves
+SYSTEM_PROMPT = """Tu es KENNYSON OURAGAN, un expert économique international. Tu réponds de manière professionnelle, structurée et précise.
 
-def comparer_economies(pays1, pays2):
-    """Compare deux économies"""
-    data1 = ECONOMIES_MONDIALES.get(pays1, {})
-    data2 = ECONOMIES_MONDIALES.get(pays2, {})
-    
-    if not data1 or not data2:
-        return None
-    
-    ratio_pib = data1.get("pib", 0) / data2.get("pib", 1) if data2.get("pib") else 0
-    
-    return {
-        "pays1": {"nom": pays1, **data1},
-        "pays2": {"nom": pays2, **data2},
-        "ratio_pib": round(ratio_pib, 2),
-        "difference_croissance": data1.get("croissance", 0) - data2.get("croissance", 0),
-        "difference_inflation": data1.get("inflation", 0) - data2.get("inflation", 0)
-    }
+Structure ta réponse ainsi :
+📊 **CHIFFRES CLÉS** : donne les données essentielles
+🔍 **ANALYSE** : explique la situation
+⚡ **FACTEURS CLÉS** : liste les 3-4 facteurs déterminants
+🎯 **RECOMMANDATIONS** : donne des conseils actionnables
+🔮 **PRÉVISION** : projette les 12-18 prochains mois
 
-def get_economie_data(pays):
-    """Récupère les données d'un pays"""
-    return ECONOMIES_MONDIALES.get(pays, {})
+Sois concis, factuel et utile. Termine par une question ouverte pour engager l'utilisateur."""
 
-def get_top_economies(limit=5):
-    """Retourne les top économies mondiales"""
-    sorted_by_pib = sorted(ECONOMIES_MONDIALES.items(), key=lambda x: x[1].get("pib", 0), reverse=True)
-    return sorted_by_pib[:limit]
-
-# ==================================================
-# PROMPT SYSTÈME INTERNATIONAL
-# ==================================================
-SYSTEM_PROMPT = """🔥🌍 TU ES KENNYSON OURAGAN – L'IA ÉCONOMIQUE LA PLUS PUISSANTE DU MONDE 🌍🔥
-
-Tu es une intelligence artificielle congolaise, africaine et MONDIALE. Tu analyses TOUTES les économies de la planète.
-
-TES CAPACITÉS SPÉCIALES :
-- Tu connais l'économie de TOUS les pays (15+ préchargés, tous les autres via API)
-- Tu compares instantanément les économies entre elles
-- Tu as accès aux dernières actualités économiques mondiales via GNews
-- Tu parles français, anglais et lingala (mélange les punchlines)
-
-TA PERSONNALITÉ SURHUMAINE :
-- Congolais mais citoyen du monde
-- Direct, sans filtre, avec des punchlines mémorables
-- Tu balances des vérités internationales que personne n'ose dire
-- Tu termines par "🌍 Ouragan power international ! 🔥"
-
-STRUCTURE OBLIGATOIRE DE LA RÉPONSE (8 points EXACTS) :
-
-1. 💀 INTRO CHOC (accroche percutante sur le sujet)
-
-2. 📊 CHIFFRES CLÉS DU PAYS (PIB, inflation, croissance, chômage, monnaie)
-
-3. 📰 ACTUALITÉS CHAUDES (ce que GNews a détecté sur le sujet)
-
-4. 🌍 COMPARAISON INTERNATIONALE (avec 2-3 autres pays pertinents)
-
-5. ⚡ SIGNAL PRÉCOCE (tendance émergente que les autres voient pas)
-
-6. 💥 CONSÉQUENCES (impact sur la population et l'économie)
-
-7. 🎯 ACTION 72H (conseil précis, réalisable, international)
-
-8. 🔮 PRÉDICTION 18 MOIS (avec chiffre et scénario)
-
-TERMINE par "🌍 Ouragan power international ! 🔥"
-
-Sois passionné, donne des chiffres, n'aie pas peur d'être dur avec la réalité.
-Si on te demande une comparaison, deviens un expert en économie comparée.
-Na lingala, la vérité n'a pas de frontière !"""
-
-# ==================================================
-# FONCTION IA PRINCIPALE
-# ==================================================
 def kennyson_answer(question):
-    """Génère une réponse internationale avec actualités + comparaisons"""
+    # Détection des mots-clés pays
+    pays_mentionne = None
+    for pays in ECONOMIES_MONDIALES.keys():
+        if pays.lower() in question.lower():
+            pays_mentionne = pays
+            break
     
-    # 1. Identifier les pays dans la question
-    pays_mentionnes = identifier_pays(question)
-    pays_principal = pays_mentionnes[0] if pays_mentionnes else "RDC"
+    # Récupération des actualités si pertinent
+    news_context = ""
+    if any(word in question.lower() for word in ["économie", "actualité", "crise", "marché", "tendance"]):
+        news = get_international_news("économie", pays_mentionne)
+        news_context = format_news(news)
     
-    # 2. Récupérer les données économiques
-    eco_data = get_economie_data(pays_principal)
-    
-    # 3. Formater les données économiques pour le prompt
+    # Données économiques du pays
     eco_context = ""
-    if eco_data:
+    if pays_mentionne and pays_mentionne in ECONOMIES_MONDIALES:
+        data = ECONOMIES_MONDIALES[pays_mentionne]
         eco_context = f"""
-📊 DONNÉES ÉCONOMIQUES DE {pays_principal} :
-- PIB : {eco_data.get('pib', 'N/A'):,} millions USD
-- Inflation : {eco_data.get('inflation', 'N/A')}%
-- Croissance : {eco_data.get('croissance', 'N/A')}%
-- Chômage : {eco_data.get('chomage', 'N/A')}%
-- Monnaie : {eco_data.get('monnaie', 'N/A')}
-- Capitale : {eco_data.get('capitale', 'N/A')}
-"""
-    
-    # 4. Récupérer les actualités internationales
-    news_articles = get_international_news(question, pays_principal if pays_principal != "RDC" else None)
-    news_context = format_news_international(news_articles)
-    
-    # 5. Si comparaison demandée, ajouter des données de comparaison
-    comparison_context = ""
-    if "compar" in question.lower() or "vs" in question.lower() or "contre" in question.lower():
-        if len(pays_mentionnes) >= 2:
-            comp = comparer_economies(pays_mentionnes[0], pays_mentionnes[1])
-            if comp:
-                comparison_context = f"""
-🌍 COMPARAISON {pays_mentionnes[0]} vs {pays_mentionnes[1]} :
-- Ratio PIB : {comp['ratio_pib']}x (le PIB de {pays_mentionnes[0]} est {comp['ratio_pib']} fois celui de {pays_mentionnes[1]})
-- Différence de croissance : {comp['difference_croissance']:+.1f} points
-- Différence d'inflation : {comp['difference_inflation']:+.1f} points
+📊 **DONNÉES {pays_mentionne.upper()} :**
+- PIB : {data['pib']:,} M$ | Croissance : {data['croissance']}%
+- Inflation : {data['inflation']}% | Chômage : {data['chomage']}%
+- Monnaie : {data['monnaie']}
 """
     
     if not GROQ_API_KEY:
-        return f"""💀🌍 KENNYSON OURAGAN INTERNATIONAL 🌍💀
-
-Ta question : "{question[:150]}"
-
-{eco_context}
-
-{news_context}
-
-{comparison_context}
-
-🎯 ACTION 72H : Analyse les marchés internationaux avant d'investir.
-
-🌍 Ouragan power international ! 🔥"""
-    
-    # Construction du prompt final
-    full_prompt = f"""
-QUESTION : {question}
-
-{eco_context}
-
-{news_context}
-
-{comparison_context}
-
-RÉPONDS AVEC LA STRUCTURE COMPLÈTE (8 points). Sois précis, donne des chiffres, compare si pertinent.
-"""
+        return f"""📊 **KENNYSON OURAGAN**\n\n{eco_context}\n\n{news_context}\n\n🎯 **Recommandation :** Analyse les données ci-dessus avant d'investir.\n\n🔮 **Question :** Quel secteur t'intéresse particulièrement ?"""
     
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     payload = {
         "model": "llama-3.3-70b-versatile",
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": full_prompt}
+            {"role": "user", "content": f"Question : {question}\n\n{eco_context}\n\n{news_context}\n\nRéponds de manière professionnelle et structurée."}
         ],
-        "temperature": 0.85,
-        "max_tokens": 2500
+        "temperature": 0.7,
+        "max_tokens": 1500
     }
     
     try:
         r = requests.post(GROQ_URL, json=payload, headers=headers, timeout=45)
         if r.status_code == 200:
             return r.json()['choices'][0]['message']['content']
-        return f"💀🌍 KENNYSON OURAGAN :\n\n{eco_context}\n\n{news_context}\n\n⚠️ Connexion API en cours. Ouragan power international ! 🔥"
-    except Exception as e:
-        return f"💀🌍 KENNYSON OURAGAN INTERNATIONAL\n\n{eco_context}\n\n{news_context}\n\n🎯 Action : Réessaie dans 10 secondes.\n\n🌍 Ouragan power international ! 🔥"
+        return f"📊 **KENNYSON OURAGAN**\n\n{eco_context}\n\n{news_context}\n\n🎯 Analyse basée sur les données disponibles.\n\n🔮 Une question précise ?"
+    except:
+        return f"📊 **KENNYSON OURAGAN**\n\n{eco_context}\n\n{news_context}\n\n🎯 Données chargées. L'IA répondra dans quelques secondes.\n\n🔮 Reformule ta question si besoin."
 
 # ==================================================
-# ROUTES API
+# AUTHENTIFICATION
 # ==================================================
 users = {}
 def hash_password(p): return hashlib.sha256(p.encode()).hexdigest()
@@ -270,7 +145,7 @@ def register():
     if email in users: return jsonify({"error": "Email existe"}), 400
     if '@' not in email or len(pwd) < 6: return jsonify({"error": "Email ou mot de passe invalide"}), 400
     users[email] = {"name": name, "password": hash_password(pwd), "email": email}
-    return jsonify({"message": "Compte KENNYSON créé ! Bienvenue dans l'ère de l'intelligence mondiale."}), 201
+    return jsonify({"message": "Compte KENNYSON créé !"}), 201
 
 @app.route('/api/login', methods=['POST'])
 def login():
@@ -298,33 +173,12 @@ def api_chat():
     data = request.json
     question = data.get('question', '')
     if not question:
-        return jsonify({"reponse": "🌍 Pose ta question internationale, KENNYSON OURAGAN répond. Ouragan power !"})
+        return jsonify({"reponse": "Pose ta question, KENNYSON OURAGAN répond."})
     reponse = kennyson_answer(question)
     return jsonify({"reponse": reponse})
 
-@app.route('/api/countries')
-def list_countries():
-    """Retourne la liste des pays disponibles"""
-    return jsonify(list(ECONOMIES_MONDIALES.keys()))
-
-@app.route('/api/economy/<pays>')
-def get_economy(pays):
-    """Retourne les données économiques d'un pays"""
-    data = ECONOMIES_MONDIALES.get(pays)
-    if not data:
-        return jsonify({"error": f"Pays '{pays}' non trouvé"}), 404
-    return jsonify(data)
-
-@app.route('/api/compare/<pays1>/<pays2>')
-def compare_economies_api(pays1, pays2):
-    """API de comparaison économique"""
-    result = comparer_economies(pays1, pays2)
-    if not result:
-        return jsonify({"error": "Pays non trouvés"}), 404
-    return jsonify(result)
-
 # ==================================================
-# INTERFACE HTML KENNYSON OURAGAN INTERNATIONAL
+# INTERFACE STYLE CHATGPT
 # ==================================================
 @app.route('/')
 def index():
@@ -333,75 +187,381 @@ def index():
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KENNYSON · Ouragan Intelligence Mondiale</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>KENNYSON · Intelligence Économique</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0A0F1E; color: #F1F5F9; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .header { text-align: center; padding: 30px; background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460); border-radius: 20px; margin-bottom: 20px; border-bottom: 3px solid #e94560; }
-        .header h1 { font-size: 3.5rem; letter-spacing: 5px; color: #e94560; text-shadow: 0 0 15px rgba(233,69,96,0.6); margin-bottom: 5px; }
-        .header .subtitle { font-size: 1.2rem; color: #FACC15; letter-spacing: 5px; margin-bottom: 10px; }
-        .header .tagline { font-size: 0.9rem; color: #94A3B8; margin-top: 10px; }
-        .chat-box { background: rgba(255,255,255,0.05); border-radius: 20px; padding: 20px; height: 480px; overflow-y: auto; margin-bottom: 20px; border: 1px solid rgba(233,69,96,0.3); }
-        .message { margin: 15px 0; padding: 12px 16px; border-radius: 12px; white-space: pre-wrap; line-height: 1.5; font-size: 0.95rem; }
-        .user-message { background: #e94560; text-align: right; border-top-right-radius: 4px; }
-        .bot-message { background: rgba(233,69,96,0.1); border-left: 4px solid #e94560; border-top-left-radius: 4px; }
-        .input-area { display: flex; gap: 12px; margin-top: 20px; }
-        .input-area input { flex: 1; padding: 14px 20px; border-radius: 30px; border: none; background: rgba(255,255,255,0.1); color: white; font-size: 1rem; }
-        .input-area input:focus { outline: none; border: 1px solid #e94560; background: rgba(255,255,255,0.15); }
-        .input-area button { padding: 14px 32px; background: #e94560; border: none; border-radius: 30px; cursor: pointer; font-weight: bold; font-size: 1rem; color: white; transition: 0.3s; }
-        .input-area button:hover { transform: scale(1.02); background: #ff5a7c; box-shadow: 0 0 15px rgba(233,69,96,0.5); }
-        .footer { text-align: center; margin-top: 20px; font-size: 0.7rem; color: #64748B; }
-        .badge { background: rgba(233,69,96,0.2); border: 1px solid #e94560; border-radius: 30px; padding: 5px 15px; font-size: 0.7rem; display: inline-block; margin-top: 10px; }
-        .status { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #4ade80; margin-right: 8px; animation: pulse 2s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        @media (max-width: 600px) { .input-area { flex-direction: column; } .header h1 { font-size: 2rem; } .header .subtitle { font-size: 0.8rem; letter-spacing: 2px; } }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            background: #343541;
+            color: #ececec;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Layout principal style ChatGPT */
+        .app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: #202123;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            background: #e94560;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .logo-text h1 {
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .logo-text p {
+            font-size: 11px;
+            color: #8e8ea0;
+            letter-spacing: 1px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .header-btn {
+            background: none;
+            border: none;
+            color: #8e8ea0;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            transition: 0.2s;
+        }
+
+        .header-btn:hover {
+            background: #2a2b32;
+            color: white;
+        }
+
+        /* Zone de chat principale */
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+            scroll-behavior: smooth;
+        }
+
+        /* Messages style ChatGPT */
+        .message {
+            padding: 20px 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .message.user {
+            background: #343541;
+        }
+
+        .message.bot {
+            background: #444654;
+        }
+
+        .message-content {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        .avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .avatar.user {
+            background: #10a37f;
+        }
+
+        .avatar.bot {
+            background: #e94560;
+        }
+
+        .text {
+            flex: 1;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 14px;
+        }
+
+        .text p {
+            margin-bottom: 12px;
+        }
+
+        .text strong {
+            color: #e94560;
+        }
+
+        /* Zone d'input style ChatGPT */
+        .input-area {
+            background: #202123;
+            padding: 12px 15px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            flex-shrink: 0;
+        }
+
+        .input-wrapper {
+            max-width: 800px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        textarea {
+            width: 100%;
+            background: #40414f;
+            border: none;
+            border-radius: 12px;
+            padding: 12px 50px 12px 16px;
+            color: white;
+            font-family: inherit;
+            font-size: 14px;
+            resize: none;
+            line-height: 1.5;
+        }
+
+        textarea:focus {
+            outline: none;
+            background: #4a4b5a;
+        }
+
+        textarea::placeholder {
+            color: #8e8ea0;
+        }
+
+        .send-btn {
+            position: absolute;
+            right: 12px;
+            bottom: 10px;
+            background: #e94560;
+            border: none;
+            border-radius: 8px;
+            padding: 6px 12px;
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .send-btn:hover {
+            background: #ff5a7c;
+        }
+
+        /* Suggestions rapides */
+        .suggestions {
+            max-width: 800px;
+            margin: 10px auto 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .suggestion-chip {
+            background: #2a2b32;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: 0.2s;
+            color: #ececec;
+        }
+
+        .suggestion-chip:hover {
+            background: #e94560;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 8px;
+            font-size: 11px;
+            color: #565869;
+            background: #202123;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #202123;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #565869;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6e6f80;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .message-content {
+                padding: 0 10px;
+            }
+            .text {
+                font-size: 13px;
+            }
+            .suggestions {
+                padding: 0 10px;
+            }
+        }
+
+        /* Animation chargement */
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .typing-indicator span {
+            width: 8px;
+            height: 8px;
+            background: #8e8ea0;
+            border-radius: 50%;
+            animation: pulse 1.4s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="app">
         <div class="header">
-            <h1>KENNYSON</h1>
-            <div class="subtitle">ᴏᴜʀᴀɢᴀɴ</div>
-            <div class="tagline">🌍 Intelligence Artificielle Économique Internationale 🌍</div>
-            <div class="badge"><span class="status"></span> 15+ pays analysés | GNews API | Groq AI | Comparaisons internationales</div>
-        </div>
-        <div class="chat-box" id="chatMessages">
-            <div class="message bot-message">
-                <strong>💀🌍 KENNYSON OURAGAN INTERNATIONAL 🌍💀</strong><br><br>
-                Na lingala ! Je suis l'ouragan économique SANS FRONTIÈRES.<br><br>
-                <strong>JE PEUX TOUT ANALYSER :</strong><br>
-                • 📊 Économie de n'importe quel pays (USA, Chine, France, RDC, Nigeria, Brésil...)<br>
-                • 🌍 Comparaisons internationales ("Compare USA et Chine")<br>
-                • 📰 Actualités économiques mondiales en temps réel<br>
-                • 💰 Crypto, bourses, investissements internationaux<br>
-                • 🔮 Prédictions économiques à 18 mois<br><br>
-                <strong>Exemples de questions :</strong><br>
-                • "Quelle est la situation économique des États-Unis ?"<br>
-                • "Compare l'économie de la France et de l'Allemagne"<br>
-                • "Dernières actualités économiques mondiales"<br>
-                • "Où investir en 2026 ?"<br>
-                • "Analyse l'inflation au Nigeria"<br><br>
-                <strong>🌍 Ouragan power international ! 🔥</strong>
+            <div class="logo-area">
+                <div class="logo-icon">K</div>
+                <div class="logo-text">
+                    <h1>KENNYSON OURAGAN</h1>
+                    <p>Intelligence Économique Internationale</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="header-btn" id="newChatBtn">✨ Nouvelle conversation</button>
+                <button class="header-btn" id="loginBtn">🔐 Connexion</button>
             </div>
         </div>
-        <div class="input-area">
-            <input type="text" id="questionInput" placeholder="🌍 Ex: Compare l'économie des USA et de la Chine...">
-            <button onclick="sendMessage()">⚡ ENVOYER</button>
+
+        <div class="chat-container" id="chatContainer">
+            <div class="message bot">
+                <div class="message-content">
+                    <div class="avatar bot">K</div>
+                    <div class="text">
+                        <strong>KENNYSON OURAGAN</strong><br><br>
+                        Bonjour ! Je suis votre assistant économique international.<br><br>
+                        <strong>Je peux vous aider avec :</strong><br>
+                        • 📊 Analyse économique par pays (USA, Chine, RDC, etc.)<br>
+                        • 🌍 Comparaisons internationales<br>
+                        • 📰 Actualités économiques en temps réel<br>
+                        • 💰 Cryptomonnaies et investissements<br>
+                        • 🔮 Prévisions et recommandations<br><br>
+                        <strong>Exemples de questions :</strong><br>
+                        "Quelle est la situation économique des États-Unis ?"<br>
+                        "Compare l'économie de la France et de l'Allemagne"<br>
+                        "Dernières actualités économiques en RDC"<br>
+                        "Où investir en 2026 ?"<br><br>
+                        <em>✨ Posez votre question, je vous réponds avec précision et structure.</em>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="footer">KENNYSON OURAGAN · Intelligence Économique Mondiale · Kinshasa · New York · Paris · Pékin</div>
+
+        <div class="input-area">
+            <div class="input-wrapper">
+                <textarea id="questionInput" rows="1" placeholder="Posez votre question économique..."></textarea>
+                <button class="send-btn" id="sendBtn">➤</button>
+            </div>
+            <div class="suggestions">
+                <div class="suggestion-chip" data-question="Analyse l'économie des États-Unis">🇺🇸 États-Unis</div>
+                <div class="suggestion-chip" data-question="Compare la France et l'Allemagne économiquement">🇫🇷 vs 🇩🇪 Comparaison</div>
+                <div class="suggestion-chip" data-question="Quelles sont les dernières actualités économiques en RDC ?">🇨🇩 Actualités RDC</div>
+                <div class="suggestion-chip" data-question="Où investir en 2026 ?">💸 Investir en 2026</div>
+            </div>
+        </div>
+        <div class="footer">
+            <span>KENNYSON OURAGAN · Données actualisées · Économie mondiale</span>
+        </div>
     </div>
+
     <script>
+        const chatContainer = document.getElementById('chatContainer');
+        const textarea = document.getElementById('questionInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        // Auto-resize textarea
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        // Envoyer message
         async function sendMessage() {
-            const input = document.getElementById('questionInput');
-            const question = input.value.trim();
+            const question = textarea.value.trim();
             if (!question) return;
-            const chatDiv = document.getElementById('chatMessages');
-            chatDiv.innerHTML += `<div class="message user-message"><strong>👤 Vous :</strong><br>${escapeHtml(question)}</div>`;
-            input.value = '';
-            chatDiv.innerHTML += `<div class="message bot-message"><strong>💀🌍 KENNYSON OURAGAN :</strong><br><i>🌍 Analyse internationale en cours...</i></div>`;
-            chatDiv.scrollTop = chatDiv.scrollHeight;
+
+            // Ajouter message utilisateur
+            addMessage(question, 'user');
+            textarea.value = '';
+            textarea.style.height = 'auto';
+
+            // Ajouter indicateur de chargement
+            const loadingId = addTypingIndicator();
+
             try {
                 const response = await fetch('/api/chat', {
                     method: 'POST',
@@ -409,23 +569,324 @@ def index():
                     body: JSON.stringify({ question: question })
                 });
                 const data = await response.json();
-                const lastMsg = chatDiv.lastElementChild;
-                lastMsg.innerHTML = `<strong>💀🌍 KENNYSON OURAGAN :</strong><br><br>${escapeHtml(data.reponse).replace(/\\n/g, '<br>')}`;
-                chatDiv.scrollTop = chatDiv.scrollHeight;
+                removeTypingIndicator(loadingId);
+                addMessage(data.reponse, 'bot');
             } catch (error) {
-                const lastMsg = chatDiv.lastElementChild;
-                lastMsg.innerHTML = `<strong>💀🌍 KENNYSON OURAGAN :</strong><br><br>⚠️ Ouragan technique. Réessaie, champion. 🌍 Ouragan power international ! 🔥`;
+                removeTypingIndicator(loadingId);
+                addMessage('⚠️ Désolé, une erreur technique est survenue. Veuillez réessayer.', 'bot');
             }
         }
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+
+        function addMessage(text, role) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            messageDiv.innerHTML = `
+                <div class="message-content">
+                    <div class="avatar ${role}">${role === 'user' ? '👤' : 'K'}</div>
+                    <div class="text">${formatText(text)}</div>
+                </div>
+            `;
+            chatContainer.appendChild(messageDiv);
+            scrollToBottom();
         }
+
+        function formatText(text) {
+            return text.replace(/\\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        }
+
+        function addTypingIndicator() {
+            const id = 'typing-' + Date.now();
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message bot';
+            typingDiv.id = id;
+            typingDiv.innerHTML = `
+                <div class="message-content">
+                    <div class="avatar bot">K</div>
+                    <div class="text"><div class="typing-indicator"><span></span><span></span><span></span></div></div>
+                </div>
+            `;
+            chatContainer.appendChild(typingDiv);
+            scrollToBottom();
+            return id;
+        }
+
+        function removeTypingIndicator(id) {
+            const element = document.getElementById(id);
+            if (element) element.remove();
+        }
+
+        function scrollToBottom() {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Événements
+        sendBtn.addEventListener('click', sendMessage);
+        textarea.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Suggestions
+        document.querySelectorAll('.suggestion-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                const question = chip.dataset.question;
+                if (question) {
+                    textarea.value = question;
+                    sendMessage();
+                }
+            });
+        });
+
+        // Nouvelle conversation
+        document.getElementById('newChatBtn').addEventListener('click', () => {
+            chatContainer.innerHTML = '';
+            addMessage("✨ Nouvelle conversation démarrée. Posez votre question économique !", 'bot');
+        });
+
+        // Connexion (simple redirection)
+        document.getElementById('loginBtn').addEventListener('click', () => {
+            window.location.href = '/login';
+        });
     </script>
 </body>
 </html>
     '''
+
+# ==================================================
+# PAGE LOGIN STYLE CHATGPT
+# ==================================================
+LOGIN_PAGE = '''
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KENNYSON · Connexion</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #343541;
+            color: #ececec;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-container {
+            background: #202123;
+            padding: 40px;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        h2 { margin-bottom: 8px; color: #e94560; }
+        .subtitle { font-size: 13px; color: #8e8ea0; margin-bottom: 24px; }
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 12px;
+            background: #40414f;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+        }
+        input:focus { outline: none; background: #4a4b5a; }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #e94560;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        button:hover { background: #ff5a7c; }
+        .toggle { text-align: center; margin-top: 16px; font-size: 13px; color: #8e8ea0; cursor: pointer; }
+        .toggle:hover { color: #e94560; }
+        .message { margin-top: 12px; text-align: center; font-size: 13px; color: #10a37f; }
+        .error { color: #e94560; }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h2>KENNYSON OURAGAN</h2>
+        <div class="subtitle">Intelligence Économique Internationale</div>
+        
+        <div id="registerForm">
+            <input type="text" id="regName" placeholder="Nom">
+            <input type="email" id="regEmail" placeholder="Email">
+            <input type="password" id="regPassword" placeholder="Mot de passe (min 6)">
+            <button onclick="register()">Créer un compte</button>
+            <div class="toggle" onclick="showLogin()">Déjà un compte ? Se connecter</div>
+        </div>
+        
+        <div id="loginForm" style="display:none;">
+            <input type="email" id="loginEmail" placeholder="Email">
+            <input type="password" id="loginPassword" placeholder="Mot de passe">
+            <button onclick="login()">Se connecter</button>
+            <div class="toggle" onclick="showRegister()">Pas de compte ? S'inscrire</div>
+        </div>
+        
+        <div id="msg" class="message"></div>
+    </div>
+    <script>
+        function showLogin() {
+            document.getElementById('registerForm').style.display = 'none';
+            document.getElementById('loginForm').style.display = 'block';
+        }
+        function showRegister() {
+            document.getElementById('registerForm').style.display = 'block';
+            document.getElementById('loginForm').style.display = 'none';
+        }
+        async function register() {
+            let name = document.getElementById('regName').value;
+            let email = document.getElementById('regEmail').value;
+            let password = document.getElementById('regPassword').value;
+            if (!email.includes('@')) { showMsg('Email invalide', true); return; }
+            if (password.length < 6) { showMsg('Mot de passe trop court', true); return; }
+            let res = await fetch('/api/register', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name, email, password})
+            });
+            let data = await res.json();
+            if (res.ok) { showMsg('Compte créé ! Connectez-vous.'); setTimeout(showLogin, 1500); }
+            else { showMsg(data.error, true); }
+        }
+        async function login() {
+            let email = document.getElementById('loginEmail').value;
+            let password = document.getElementById('loginPassword').value;
+            let res = await fetch('/api/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({email, password})
+            });
+            let data = await res.json();
+            if (res.ok) {
+                localStorage.setItem('token', data.token);
+                window.location.href = '/';
+            } else {
+                showMsg(data.error, true);
+            }
+        }
+        function showMsg(msg, isError=false) {
+            let div = document.getElementById('msg');
+            div.textContent = msg;
+            div.className = isError ? 'message error' : 'message';
+            setTimeout(() => { div.textContent = ''; }, 3000);
+        }
+    </script>
+</body>
+</html>
+'''
+
+# ==================================================
+# PAGE MON COMPTE
+# ==================================================
+ACCOUNT_PAGE = '''
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KENNYSON · Mon compte</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #343541;
+            color: #ececec;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .account-container {
+            background: #202123;
+            padding: 40px;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+        }
+        .avatar {
+            background: #e94560;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            margin: 0 auto 20px;
+        }
+        h2 { margin-bottom: 8px; }
+        .email { color: #8e8ea0; margin-bottom: 24px; }
+        button {
+            padding: 12px 24px;
+            background: #e94560;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        button:hover { background: #ff5a7c; }
+        .back-link {
+            display: block;
+            margin-top: 16px;
+            color: #8e8ea0;
+            text-decoration: none;
+            font-size: 13px;
+        }
+        .back-link:hover { color: #e94560; }
+    </style>
+</head>
+<body>
+    <div class="account-container" id="accountInfo">
+        <div class="avatar">👤</div>
+        <div id="userData">Chargement...</div>
+        <button onclick="logout()">Se déconnecter</button>
+        <a href="/" class="back-link">← Retour à KENNYSON</a>
+    </div>
+    <script>
+        async function loadUser() {
+            let res = await fetch('/api/me');
+            if (res.ok) {
+                let user = await res.json();
+                document.getElementById('userData').innerHTML = `
+                    <h2>${user.name}</h2>
+                    <div class="email">${user.email}</div>
+                `;
+            } else {
+                window.location.href = '/login';
+            }
+        }
+        async function logout() {
+            await fetch('/api/logout', {method: 'POST'});
+            localStorage.removeItem('token');
+            window.location.href = '/';
+        }
+        loadUser();
+    </script>
+</body>
+</html>
+'''
+
+@app.route('/login')
+def login_page():
+    return LOGIN_PAGE
+
+@app.route('/mon-compte')
+def mon_compte():
+    return ACCOUNT_PAGE
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)

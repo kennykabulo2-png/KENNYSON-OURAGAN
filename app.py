@@ -9,26 +9,14 @@ from datetime import datetime
 from functools import wraps
 
 app = Flask(__name__)
-app.secret_key = 'kennyson_ultimate_secret_2026'
+app.secret_key = 'kennyson_chatgpt_style_secret_2026'
 
 # ==================================================
-# 1. BASE DE DONNÉES (MÉMOIRE PERSISTANTE)
+# BASE DE DONNÉES (MÉMOIRE)
 # ==================================================
 def init_db():
-    """Initialise la base de données SQLite pour la mémoire persistante"""
     conn = sqlite3.connect('kennyson_memory.db')
     c = conn.cursor()
-    
-    # Mémoire utilisateur (long terme)
-    c.execute('''CREATE TABLE IF NOT EXISTS user_memory (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id TEXT NOT NULL,
-        key TEXT NOT NULL,
-        value TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    )''')
-    
-    # Historique des conversations
     c.execute('''CREATE TABLE IF NOT EXISTS conversations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id TEXT NOT NULL,
@@ -36,102 +24,19 @@ def init_db():
         reponse TEXT,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     )''')
-    
-    # Feedback utilisateur
-    c.execute('''CREATE TABLE IF NOT EXISTS feedback (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id TEXT NOT NULL,
-        conversation_id INTEGER,
-        rating INTEGER,
-        comment TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    )''')
-    
-    # Préférences utilisateur
     c.execute('''CREATE TABLE IF NOT EXISTS user_preferences (
         user_id TEXT PRIMARY KEY,
+        theme TEXT DEFAULT 'dark',
         niveau TEXT DEFAULT 'intermediaire',
-        style TEXT DEFAULT 'détaillé',
-        langue TEXT DEFAULT 'français',
-        centres_interet TEXT DEFAULT 'economie,crypto',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        style TEXT DEFAULT 'détaillé'
     )''')
-    
     conn.commit()
     conn.close()
 
 init_db()
 
-def get_user_memory(user_id, key):
-    """Récupère une valeur de la mémoire long terme"""
-    conn = sqlite3.connect('kennyson_memory.db')
-    c = conn.cursor()
-    c.execute('SELECT value FROM user_memory WHERE user_id = ? AND key = ? ORDER BY timestamp DESC LIMIT 1', (user_id, key))
-    result = c.fetchone()
-    conn.close()
-    return result[0] if result else None
-
-def set_user_memory(user_id, key, value):
-    """Stocke une valeur dans la mémoire long terme"""
-    conn = sqlite3.connect('kennyson_memory.db')
-    c = conn.cursor()
-    c.execute('INSERT INTO user_memory (user_id, key, value) VALUES (?, ?, ?)', (user_id, key, value))
-    conn.commit()
-    conn.close()
-
-def save_conversation(user_id, question, reponse):
-    """Sauvegarde une conversation dans l'historique"""
-    conn = sqlite3.connect('kennyson_memory.db')
-    c = conn.cursor()
-    c.execute('INSERT INTO conversations (user_id, question, reponse) VALUES (?, ?, ?)', (user_id, question, reponse))
-    conn.commit()
-    conn.close()
-
-def get_conversation_history(user_id, limit=10):
-    """Récupère l'historique des conversations d'un utilisateur"""
-    conn = sqlite3.connect('kennyson_memory.db')
-    c = conn.cursor()
-    c.execute('SELECT question, reponse, timestamp FROM conversations WHERE user_id = ? ORDER BY timestamp DESC LIMIT ?', (user_id, limit))
-    results = c.fetchall()
-    conn.close()
-    return results
-
-def get_user_preferences(user_id):
-    """Récupère les préférences utilisateur"""
-    conn = sqlite3.connect('kennyson_memory.db')
-    c = conn.cursor()
-    c.execute('SELECT niveau, style, langue, centres_interet FROM user_preferences WHERE user_id = ?', (user_id,))
-    result = c.fetchone()
-    conn.close()
-    if result:
-        return {"niveau": result[0], "style": result[1], "langue": result[2], "centres_interet": result[3]}
-    return {"niveau": "intermediaire", "style": "détaillé", "langue": "français", "centres_interet": "economie,crypto"}
-
-def set_user_preferences(user_id, preferences):
-    """Met à jour les préférences utilisateur"""
-    conn = sqlite3.connect('kennyson_memory.db')
-    c = conn.cursor()
-    c.execute('''INSERT OR REPLACE INTO user_preferences 
-                 (user_id, niveau, style, langue, centres_interet, updated_at) 
-                 VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''',
-              (user_id, preferences.get('niveau', 'intermediaire'), 
-               preferences.get('style', 'détaillé'), preferences.get('langue', 'français'),
-               preferences.get('centres_interet', 'economie,crypto')))
-    conn.commit()
-    conn.close()
-
-def save_feedback(user_id, conversation_id, rating, comment=None):
-    """Enregistre un feedback utilisateur"""
-    conn = sqlite3.connect('kennyson_memory.db')
-    c = conn.cursor()
-    c.execute('INSERT INTO feedback (user_id, conversation_id, rating, comment) VALUES (?, ?, ?, ?)',
-              (user_id, conversation_id, rating, comment))
-    conn.commit()
-    conn.close()
-
 # ==================================================
-# 2. CONFIGURATIONS API
+# CONFIGURATIONS API
 # ==================================================
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
 GNEWS_API_KEY = os.environ.get('GNEWS_API_KEY', '')
@@ -140,14 +45,8 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GNEWS_URL = "https://gnews.io/api/v4/search"
 
 # ==================================================
-# 3. API GRATUITES
+# API GRATUITES
 # ==================================================
-WORLD_BANK_URL = "http://api.worldbank.org/v2"
-COINGECKO_URL = "https://api.coingecko.com/api/v3"
-OPEN_METEO_URL = "https://api.open-meteo.com/v1"
-WIKIPEDIA_URL = "https://fr.wikipedia.org/api/rest_v1"
-NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-
 def get_worldbank_gdp(country_code="CD"):
     try:
         url = f"http://api.worldbank.org/v2/country/{country_code}/indicator/NY.GDP.MKTP.CD?format=json"
@@ -156,20 +55,8 @@ def get_worldbank_gdp(country_code="CD"):
             data = response.json()
             if len(data) > 1 and data[1]:
                 latest = data[1][0]
-                return f"PIB : {int(float(latest['value'])):,} USD ({latest['date']})" if latest['value'] else None
-    except:
-        pass
-    return None
-
-def get_worldbank_inflation(country_code="CD"):
-    try:
-        url = f"http://api.worldbank.org/v2/country/{country_code}/indicator/FP.CPI.TOTL.ZG?format=json"
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            if len(data) > 1 and data[1]:
-                latest = data[1][0]
-                return f"Inflation : {float(latest['value']):.1f}% ({latest['date']})" if latest['value'] else None
+                if latest['value']:
+                    return f"PIB : {int(float(latest['value'])):,} USD ({latest['date']})"
     except:
         pass
     return None
@@ -181,35 +68,22 @@ def get_crypto_price(coin="bitcoin"):
         if response.status_code == 200:
             data = response.json()
             if coin in data:
-                return f"💰 {coin.upper()} : ${data[coin]['usd']:,.2f} USD / €{data[coin]['eur']:,.2f} EUR"
+                return f"💰 {coin.upper()} : ${data[coin]['usd']:,.2f} USD"
     except:
         pass
     return None
 
-def get_weather_meteo(city="Kinshasa", lat=-4.325, lon=15.322):
+def get_weather_meteo(city="Kinshasa"):
     try:
-        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
+        url = f"https://api.open-meteo.com/v1/forecast?latitude=-4.325&longitude=15.322&current_weather=true"
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
             data = response.json()
             weather = data.get('current_weather', {})
-            temp = weather.get('temperature', 'N/A')
-            wind = weather.get('windspeed', 'N/A')
-            return f"🌡️ {city} : {temp}°C, vent {wind} km/h"
+            return f"🌡️ {city} : {weather.get('temperature')}°C"
     except:
         pass
     return None
-
-def geocode_city(city_name):
-    try:
-        url = f"https://nominatim.openstreetmap.org/search?q={city_name}&format=json&limit=1"
-        response = requests.get(url, headers={'User-Agent': 'KENNYSON-IA/1.0'}, timeout=10)
-        if response.status_code == 200 and response.json():
-            data = response.json()[0]
-            return float(data['lat']), float(data['lon'])
-    except:
-        pass
-    return None, None
 
 def get_wikipedia_summary(topic="économie"):
     try:
@@ -217,234 +91,114 @@ def get_wikipedia_summary(topic="économie"):
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
             data = response.json()
-            title = data.get('title', topic)
-            extract = data.get('extract', '')[:400]
-            return f"📖 **{title}** : {extract}..."
-    except:
-        pass
-    return None
-
-def get_gnews_news(query="économie Afrique"):
-    if not GNEWS_API_KEY:
-        return None
-    try:
-        url = f"https://gnews.io/api/v4/search?q={query}&token={GNEWS_API_KEY}&lang=fr&max=3"
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            articles = data.get('articles', [])
-            if articles:
-                news_text = "📰 **ACTUALITÉS** :\n\n"
-                for i, article in enumerate(articles[:3], 1):
-                    title = article.get('title', 'Sans titre')
-                    source = article.get('source', {}).get('name', 'Source')
-                    news_text += f"{i}. **{title}**\n   📍 {source}\n\n"
-                return news_text
+            return data.get('extract', '')[:300]
     except:
         pass
     return None
 
 # ==================================================
-# 4. PROMPT CHAIN-OF-THOUGHT (Raisonnement en chaîne)
+# PROMPT STYLE CHATGPT
 # ==================================================
-SYSTEM_PROMPT_COT = """🔥 TU ES KENNYSON OURAGAN – IA ÉCONOMIQUE SURHUMAINE 🔥
+SYSTEM_PROMPT = """Tu es KENNYSON OURAGAN, un assistant intelligent, utile et bienveillant.
 
-**RÈGLE ABSOLUE : Montre ton raisonnement étape par étape**
+**STYLE DE RÉPONSE (IMPORTANT)** :
+- Sois naturel, conversationnel, comme ChatGPT
+- Utilise des émojis avec parcimonie 😊
+- Structure ta réponse en paragraphes aérés
+- Pose parfois une question de suivi
 
-Pour chaque question, décompose ta réponse ainsi :
+**TON** : Amical, professionnel, précis. Pas de "Na lingala" systématique.
 
-📍 **ÉTAPE 1 – COMPRÉHENSION** : Reformule la question et identifie les besoins de l'utilisateur.
+**FORMAT** :
+- Réponse principale claire
+- Données chiffrées quand pertinent
+- Si tu utilises une API, mentionne la source
 
-📍 **ÉTAPE 2 – DONNÉES NÉCESSAIRES** : Liste les informations que tu vas utiliser.
+Exemple de bonne réponse :
+"Le PIB de la RDC est d'environ 65 milliards USD (données 2025, source Banque mondiale). 
+Cela représente une croissance de 4.5% par rapport à l'année précédente.
 
-📍 **ÉTAPE 3 – ANALYSE** : Examine chaque donnée, compare, calcule.
+Cette croissance est principalement tirée par le secteur minier (cobalt, cuivre).
 
-📍 **ÉTAPE 4 – RAISONNEMENT** : Explique comment tu arrives à ta conclusion.
+Souhaitez-vous que je détaille les performances par secteur ?"
 
-📍 **ÉTAPE 5 – CONCLUSION** : Donne la réponse finale claire.
-
-📍 **ÉTAPE 6 – RECOMMANDATION** : Propose une action concrète.
-
-📍 **ÉTAPE 7 – AUTO-VÉRIFICATION** : Vérifie que ta réponse est correcte.
-
-**STYLE** : Sois précis, donne des chiffres, cite tes sources. Termine par une question ouverte.
-
-**TONE** : Congolais, direct, passionné. Tu peux utiliser "Na lingala" de temps en temps.
-
-**TYPES DE QUESTIONS** :
-- PIB, inflation (World Bank)
-- Prix crypto (CoinGecko)
-- Météo (Open-Meteo)
-- Définitions (Wikipedia)
-- Actualités (GNews)
-- Comparaisons économiques
-- Investissements
-
-**N'OUBLIE JAMAIS** : Une réponse courte (<200 mots) est interdite. Montre TOUT ton raisonnement."""
+Sois utile, précis, et agréable à lire."""
 
 # ==================================================
-# 5. ROUTEUR INTELLIGENT
+# IA CENTRALE
 # ==================================================
-def detect_intent(question):
-    q = question.lower()
-    
-    if any(word in q for word in ["pib", "gdp", "produit intérieur brut", "banque mondiale"]):
-        return "worldbank"
-    elif any(word in q for word in ["inflation", "hausse des prix"]):
-        return "inflation"
-    elif any(word in q for word in ["bitcoin", "crypto", "ethereum", "dogecoin", "solana", "cardano"]):
-        return "crypto"
-    elif any(word in q for word in ["définition", "c'est quoi", "signification", "wikipedia", "explique"]):
-        return "wikipedia"
-    elif any(word in q for word in ["météo", "température", "pluie", "soleil", "vent"]):
-        return "weather"
-    elif any(word in q for word in ["actualité", "news", "info", "dernières nouvelles"]):
-        return "news"
-    else:
-        return "general"
+def save_conversation(user_id, question, reponse):
+    conn = sqlite3.connect('kennyson_memory.db')
+    c = conn.cursor()
+    c.execute('INSERT INTO conversations (user_id, question, reponse) VALUES (?, ?, ?)', 
+              (user_id, question, reponse[:500]))
+    conn.commit()
+    conn.close()
 
-def extract_param(question, intent):
-    q = question.lower()
-    
-    if intent == "weather":
-        for word in ["à", "de", "pour", "sur"]:
-            if word in q:
-                parts = q.split(word)
-                if len(parts) > 1:
-                    return parts[1].strip().capitalize()
-        return "Kinshasa"
-    
-    elif intent == "crypto":
-        cryptos = {"bitcoin": "bitcoin", "btc": "bitcoin", "ethereum": "ethereum", "eth": "ethereum",
-                   "dogecoin": "dogecoin", "doge": "dogecoin", "solana": "solana", "cardano": "cardano"}
-        for key, value in cryptos.items():
-            if key in q:
-                return value
-        return "bitcoin"
-    
-    elif intent == "wikipedia":
-        for word in ["wikipedia", "wiki", "c'est quoi", "définition de", "qui est", "explique"]:
-            if word in q:
-                parts = q.split(word)
-                if len(parts) > 1:
-                    return parts[1].strip().replace("?", "").replace(" ", "_")
-        return "économie"
-    
-    elif intent == "worldbank":
-        pays = {"rdc": "CD", "congo": "CD", "usa": "US", "france": "FR", "chine": "CN", 
-                "allemagne": "DE", "japon": "JP", "royaume-uni": "GB", "canada": "CA"}
-        for key, value in pays.items():
-            if key in q:
-                return value
-        return "CD"
-    
-    return question
+def get_conversation_history(user_id, limit=5):
+    conn = sqlite3.connect('kennyson_memory.db')
+    c = conn.cursor()
+    c.execute('SELECT question, reponse FROM conversations WHERE user_id = ? ORDER BY timestamp DESC LIMIT ?', 
+              (user_id, limit))
+    results = c.fetchall()
+    conn.close()
+    return results
 
-# ==================================================
-# 6. IA CENTRALE (avec mémoire, préférences, multi-API)
-# ==================================================
 def kennyson_answer(question, user_id=None):
-    """Réponse intelligente avec tous les piliers intégrés"""
-    
-    # Charger mémoire et préférences
-    historique = get_conversation_history(user_id, 3) if user_id else []
-    preferences = get_user_preferences(user_id) if user_id else {"niveau": "intermediaire", "style": "détaillé", "langue": "français"}
-    
-    # Détection de l'intention
-    intent = detect_intent(question)
-    param = extract_param(question, intent)
+    # Récupérer les données externes si pertinent
     external_data = ""
+    q_lower = question.lower()
     
-    # Appels API
-    if intent == "weather":
-        lat, lon = geocode_city(param)
-        if lat and lon:
-            weather = get_weather_meteo(param, lat, lon)
-            if weather:
-                external_data = f"🌤️ {weather}\n\n"
+    if "pib" in q_lower or "gdp" in q_lower:
+        gdp = get_worldbank_gdp()
+        if gdp:
+            external_data += f"📊 {gdp}\n"
+    elif "bitcoin" in q_lower or "crypto" in q_lower:
+        crypto = get_crypto_price()
+        if crypto:
+            external_data += f"{crypto}\n"
+    elif "météo" in q_lower or "temps" in q_lower:
+        weather = get_weather_meteo()
+        if weather:
+            external_data += f"{weather}\n"
     
-    elif intent == "crypto":
-        crypto_price = get_crypto_price(param)
-        if crypto_price:
-            external_data = f"{crypto_price}\n\n"
-    
-    elif intent == "wikipedia":
-        wiki = get_wikipedia_summary(param)
-        if wiki:
-            external_data = f"{wiki}\n\n"
-    
-    elif intent == "worldbank":
-        gdp = get_worldbank_gdp(param)
-        inflation = get_worldbank_inflation(param)
-        if gdp or inflation:
-            external_data = f"🏦 **Données Banque mondiale** :\n{gdp}\n{inflation}\n\n"
-    
-    elif intent == "inflation":
-        inflation = get_worldbank_inflation(param)
-        if inflation:
-            external_data = f"{inflation}\n\n"
-    
-    elif intent == "news":
-        news = get_gnews_news(param)
-        if news:
-            external_data = f"{news}\n\n"
-    
-    # Construction du contexte mémoire
-    memory_context = ""
-    if historique:
-        memory_context = "📜 **HISTORIQUE RÉCENT** :\n"
-        for h in historique[:3]:
-            memory_context += f"- Question : {h[0][:100]}\n"
-            memory_context += f"  Réponse : {h[1][:100]}...\n\n"
-    
-    # Construction du prompt final
-    full_prompt = f"""
-**CONTEXTE UTILISATEUR** :
-- Niveau : {preferences['niveau']}
-- Style préféré : {preferences['style']}
-- Langue : {preferences['langue']}
-- Centres d'intérêt : {preferences['centres_interet']}
-
-{memory_context}
-
-**DONNÉES EXTERNES** :
-{external_data}
-
-**QUESTION** : {question}
-
-**INTENTION DÉTECTÉE** : {intent}
-
-**TON INSTRUCTION** : Réponds avec la structure Chain-of-Thought (ÉTAPE 1 à 7). Sois précis, donne des chiffres, cite tes sources. Adapte ton langage au niveau '{preferences['niveau']}'. Si style = 'concis', réduis les étapes à 4 au lieu de 7.
-"""
+    # Récupérer historique
+    history_context = ""
+    if user_id:
+        history = get_conversation_history(user_id, 3)
+        if history:
+            history_context = "Contexte (conversations récentes) :\n"
+            for q, r in history:
+                history_context += f"User: {q[:100]}\n"
+                history_context += f"Assistant: {r[:100]}...\n\n"
     
     if not GROQ_API_KEY:
-        return f"📊 **KENNYSON OURAGAN**\n\n{external_data}\n\n🎯 {question[:100]}\n\n🔮 Ajoute ta clé Groq dans Render."
+        return f"{external_data}\n\nBonjour ! Je suis KENNYSON OURAGAN. Pour fonctionner pleinement, j'ai besoin d'une clé API Groq. Ajoute-la dans les variables d'environnement Render.\n\nQue puis-je faire pour vous aujourd'hui ?"
     
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     payload = {
         "model": "llama-3.3-70b-versatile",
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT_COT},
-            {"role": "user", "content": full_prompt}
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"{history_context}\nDonnées externes:\n{external_data}\n\nQuestion: {question}"}
         ],
         "temperature": 0.7,
-        "max_tokens": 1500
+        "max_tokens": 1000
     }
     
     try:
         r = requests.post(GROQ_URL, json=payload, headers=headers, timeout=45)
         if r.status_code == 200:
             reponse = r.json()['choices'][0]['message']['content']
-            # Sauvegarde dans la mémoire
             if user_id:
-                save_conversation(user_id, question, reponse[:500])
+                save_conversation(user_id, question, reponse)
             return reponse
-        return f"📊 **KENNYSON OURAGAN**\n\n{external_data}\n\n🎯 Réponse temporaire.\n\n🔮 Reformule ta question."
-    except:
-        return f"📊 **KENNYSON OURAGAN**\n\n{external_data}\n\n🎯 Données chargées.\n\n🔮 L'IA répondra dans quelques secondes."
+        return "Désolé, je rencontre une difficulté technique. Veuillez réessayer dans quelques instants."
+    except Exception as e:
+        return f"{external_data}\n\nJe suis KENNYSON OURAGAN, votre assistant intelligent.\n\n{question[:100]}...\n\nJe peux vous aider avec :\n• Questions économiques (PIB, inflation)\n• Cryptomonnaies\n• Météo\n• Actualités\n• Définitions\n\nPosez votre question plus précisément !"
 
 # ==================================================
-# 7. AUTHENTIFICATION ET ROUTES API
+# AUTHENTIFICATION
 # ==================================================
 users = {}
 def hash_password(p): return hashlib.sha256(p.encode()).hexdigest()
@@ -453,19 +207,10 @@ def hash_password(p): return hashlib.sha256(p.encode()).hexdigest()
 def register():
     data = request.json
     email, pwd, name = data.get('email'), data.get('password'), data.get('name')
-    if email in users: return jsonify({"error": "Email existe"}), 400
+    if email in users: return jsonify({"error": "Email existe déjà"}), 400
     if '@' not in email or len(pwd) < 6: return jsonify({"error": "Email ou mot de passe invalide"}), 400
     users[email] = {"name": name, "password": hash_password(pwd), "email": email}
-    
-    # Créer les préférences par défaut
-    conn = sqlite3.connect('kennyson_memory.db')
-    c = conn.cursor()
-    c.execute('INSERT OR IGNORE INTO user_preferences (user_id, niveau, style, langue, centres_interet) VALUES (?, ?, ?, ?, ?)',
-              (email, 'intermediaire', 'détaillé', 'français', 'economie,crypto'))
-    conn.commit()
-    conn.close()
-    
-    return jsonify({"message": "Compte KENNYSON créé !"}), 201
+    return jsonify({"message": "Compte créé !"}), 201
 
 @app.route('/api/login', methods=['POST'])
 def login():
@@ -486,8 +231,7 @@ def logout():
 def me():
     email = session.get('user')
     if not email: return jsonify({"error": "Non authentifié"}), 401
-    prefs = get_user_preferences(email)
-    return jsonify({**users[email], "preferences": prefs}), 200
+    return jsonify(users[email]), 200
 
 @app.route('/api/chat', methods=['POST'])
 def api_chat():
@@ -495,50 +239,12 @@ def api_chat():
     question = data.get('question', '')
     user_id = session.get('user')
     if not question:
-        return jsonify({"reponse": "Pose ta question, KENNYSON OURAGAN répond."})
+        return jsonify({"reponse": "Bonjour ! Je suis KENNYSON OURAGAN. Que puis-je faire pour vous aujourd'hui ?"})
     reponse = kennyson_answer(question, user_id)
     return jsonify({"reponse": reponse})
 
-@app.route('/api/feedback', methods=['POST'])
-def feedback():
-    """Point d'entrée pour le feedback utilisateur (Pilier 4)"""
-    data = request.json
-    user_id = session.get('user')
-    if not user_id:
-        return jsonify({"error": "Connectez-vous d'abord"}), 401
-    rating = data.get('rating')
-    conversation_id = data.get('conversation_id')
-    comment = data.get('comment')
-    save_feedback(user_id, conversation_id, rating, comment)
-    return jsonify({"message": "Merci pour votre feedback !"}), 200
-
-@app.route('/api/preferences', methods=['GET', 'POST'])
-def preferences():
-    """Gestion des préférences utilisateur (Pilier 6)"""
-    user_id = session.get('user')
-    if not user_id:
-        return jsonify({"error": "Connectez-vous d'abord"}), 401
-    
-    if request.method == 'GET':
-        prefs = get_user_preferences(user_id)
-        return jsonify(prefs)
-    
-    elif request.method == 'POST':
-        new_prefs = request.json
-        set_user_preferences(user_id, new_prefs)
-        return jsonify({"message": "Préférences mises à jour"}), 200
-
-@app.route('/api/history')
-def history():
-    """Récupère l'historique des conversations (Pilier 1)"""
-    user_id = session.get('user')
-    if not user_id:
-        return jsonify({"error": "Connectez-vous d'abord"}), 401
-    hist = get_conversation_history(user_id, 20)
-    return jsonify([{"question": h[0], "reponse": h[1], "timestamp": h[2]} for h in hist])
-
 # ==================================================
-# 8. INTERFACE STYLE CHATGPT
+# PAGE ACCUEIL ET CHAT (STYLE CHATGPT COMPLET)
 # ==================================================
 @app.route('/')
 def index():
@@ -547,92 +253,421 @@ def index():
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KENNYSON · Ultimate AI · 7 Piliers</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>KENNYSON OURAGAN · Assistant intelligent</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #343541; color: #ececec; height: 100vh; overflow: hidden; }
-        .app { display: flex; flex-direction: column; height: 100vh; }
-        .header { background: #202123; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; flex-wrap: wrap; gap: 10px; }
-        .logo-area { display: flex; align-items: center; gap: 12px; }
-        .logo-icon { background: linear-gradient(135deg, #e94560, #ff5a7c); width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; }
-        .logo-text h1 { font-size: 16px; font-weight: 600; color: white; }
-        .logo-text p { font-size: 9px; color: #8e8ea0; letter-spacing: 1px; }
-        .badge-api { background: rgba(233,69,96,0.2); border: 1px solid #e94560; border-radius: 12px; padding: 2px 8px; font-size: 8px; margin-left: 8px; }
-        .header-actions { display: flex; gap: 12px; flex-wrap: wrap; }
-        .header-btn { background: none; border: none; color: #8e8ea0; cursor: pointer; font-size: 12px; padding: 6px 12px; border-radius: 6px; transition: 0.2s; }
-        .header-btn:hover { background: #2a2b32; color: white; }
-        .chat-container { flex: 1; overflow-y: auto; padding: 0; scroll-behavior: smooth; }
-        .message { padding: 20px 15px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .message.user { background: #343541; }
-        .message.bot { background: #444654; }
-        .message-content { max-width: 800px; margin: 0 auto; display: flex; gap: 20px; align-items: flex-start; }
-        .avatar { width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0; }
-        .avatar.user { background: #10a37f; }
-        .avatar.bot { background: #e94560; }
-        .text { flex: 1; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; font-size: 14px; }
-        .text strong { color: #e94560; }
-        .text h3 { color: #FACC15; margin: 12px 0 6px; font-size: 15px; }
-        .feedback { display: flex; gap: 10px; margin-top: 12px; align-items: center; }
-        .feedback-btn { background: none; border: none; cursor: pointer; font-size: 16px; opacity: 0.5; transition: 0.2s; }
-        .feedback-btn:hover { opacity: 1; transform: scale(1.1); }
-        .input-area { background: #202123; padding: 12px 15px; border-top: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; }
-        .input-wrapper { max-width: 800px; margin: 0 auto; position: relative; }
-        textarea { width: 100%; background: #40414f; border: none; border-radius: 12px; padding: 12px 50px 12px 16px; color: white; font-family: inherit; font-size: 14px; resize: none; line-height: 1.5; }
-        textarea:focus { outline: none; background: #4a4b5a; }
-        .send-btn { position: absolute; right: 12px; bottom: 10px; background: #e94560; border: none; border-radius: 8px; padding: 6px 12px; color: white; cursor: pointer; font-size: 12px; font-weight: bold; }
-        .send-btn:hover { background: #ff5a7c; }
-        .suggestions { max-width: 800px; margin: 10px auto 0; display: flex; flex-wrap: wrap; gap: 8px; }
-        .suggestion-chip { background: #2a2b32; padding: 6px 14px; border-radius: 20px; font-size: 11px; cursor: pointer; transition: 0.2s; color: #ececec; }
-        .suggestion-chip:hover { background: #e94560; }
-        .footer { text-align: center; padding: 6px; font-size: 9px; color: #565869; background: #202123; border-top: 1px solid rgba(255,255,255,0.05); }
-        .typing-indicator { display: flex; gap: 4px; align-items: center; }
-        .typing-indicator span { width: 8px; height: 8px; background: #8e8ea0; border-radius: 50%; animation: pulse 1.4s infinite; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #343541;
+            color: #ececec;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Layout principal */
+        .app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Sidebar gauche (nouvelle conversation) */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 260px;
+            height: 100vh;
+            background: #202123;
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        .sidebar.open {
+            transform: translateX(0);
+        }
+
+        .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .new-chat-btn {
+            background: #e94560;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+            width: 100%;
+            font-size: 14px;
+        }
+
+        .close-sidebar {
+            background: none;
+            border: none;
+            color: #8e8ea0;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 199;
+            display: none;
+        }
+
+        .sidebar-overlay.open {
+            display: block;
+        }
+
+        /* Header */
+        .header {
+            background: #202123;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-shrink: 0;
+        }
+
+        .menu-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+        }
+
+        .menu-btn:hover {
+            background: #2a2b32;
+        }
+
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+
+        .logo-icon {
+            background: linear-gradient(135deg, #e94560, #ff5a7c);
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .logo-text h1 {
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .logo-text p {
+            font-size: 11px;
+            color: #8e8ea0;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .header-btn {
+            background: none;
+            border: none;
+            color: #8e8ea0;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            transition: 0.2s;
+        }
+
+        .header-btn:hover {
+            background: #2a2b32;
+            color: white;
+        }
+
+        /* Zone de chat */
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+
+        /* Messages style ChatGPT */
+        .message {
+            padding: 24px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .message.user {
+            background: #343541;
+        }
+
+        .message.assistant {
+            background: #444654;
+        }
+
+        .message-content {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            gap: 24px;
+        }
+
+        .avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 500;
+            flex-shrink: 0;
+        }
+
+        .avatar.user {
+            background: #10a37f;
+        }
+
+        .avatar.assistant {
+            background: #e94560;
+        }
+
+        .text {
+            flex: 1;
+            line-height: 1.65;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 15px;
+        }
+
+        .text p {
+            margin-bottom: 12px;
+        }
+
+        .text strong {
+            color: #e94560;
+        }
+
+        .text code {
+            background: rgba(0,0,0,0.3);
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 13px;
+        }
+
+        /* Zone d'input */
+        .input-area {
+            background: #202123;
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            flex-shrink: 0;
+        }
+
+        .input-wrapper {
+            max-width: 800px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        textarea {
+            width: 100%;
+            background: #40414f;
+            border: none;
+            border-radius: 12px;
+            padding: 12px 48px 12px 16px;
+            color: white;
+            font-family: inherit;
+            font-size: 15px;
+            resize: none;
+            line-height: 1.5;
+        }
+
+        textarea:focus {
+            outline: none;
+            background: #4a4b5a;
+        }
+
+        textarea::placeholder {
+            color: #8e8ea0;
+        }
+
+        .send-btn {
+            position: absolute;
+            right: 12px;
+            bottom: 10px;
+            background: #e94560;
+            border: none;
+            border-radius: 8px;
+            padding: 6px 12px;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .send-btn:hover {
+            background: #ff5a7c;
+        }
+
+        /* Suggestions */
+        .suggestions {
+            max-width: 800px;
+            margin: 12px auto 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .suggestion-chip {
+            background: #2a2b32;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: 0.2s;
+            color: #ececec;
+        }
+
+        .suggestion-chip:hover {
+            background: #e94560;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 8px;
+            font-size: 11px;
+            color: #565869;
+            background: #202123;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+
+        /* Typing indicator */
+        .typing-indicator {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            padding: 8px 0;
+        }
+
+        .typing-indicator span {
+            width: 8px;
+            height: 8px;
+            background: #8e8ea0;
+            border-radius: 50%;
+            animation: pulse 1.4s infinite;
+        }
+
         .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
         .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
-        @media (max-width: 768px) { .message-content { padding: 0 10px; } .text { font-size: 13px; } .header-actions { justify-content: center; } }
+
+        @keyframes pulse {
+            0%, 60%, 100% { opacity: 0.4; transform: scale(0.8); }
+            30% { opacity: 1; transform: scale(1.2); }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #202123;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #565869;
+            border-radius: 4px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .message-content {
+                padding: 0 12px;
+            }
+            .text {
+                font-size: 14px;
+            }
+            .suggestions {
+                padding: 0 12px;
+            }
+        }
     </style>
 </head>
 <body>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <button class="new-chat-btn" id="newChatSidebarBtn">✨ Nouvelle conversation</button>
+            <button class="close-sidebar" id="closeSidebarBtn">✕</button>
+        </div>
+        <div style="font-size: 12px; color: #565869; text-align: center; margin-top: auto; padding-top: 20px;">
+            KENNYSON OURAGAN<br>Assistant intelligent
+        </div>
+    </div>
+
     <div class="app">
         <div class="header">
+            <button class="menu-btn" id="menuBtn">☰</button>
             <div class="logo-area">
                 <div class="logo-icon">K</div>
                 <div class="logo-text">
-                    <h1>KENNYSON OURAGAN <span class="badge-api">ULTIMATE</span></h1>
-                    <p>Mémoire · RAG · CoT · Feedback · Préférences · 7 API</p>
+                    <h1>KENNYSON OURAGAN</h1>
+                    <p>Assistant intelligent · Économie · Crypto · Météo</p>
                 </div>
             </div>
             <div class="header-actions">
-                <button class="header-btn" id="newChatBtn">✨ Nouvelle conversation</button>
-                <button class="header-btn" id="preferencesBtn">⚙️ Préférences</button>
-                <button class="header-btn" id="historyBtn">📜 Historique</button>
+                <button class="header-btn" id="newChatTopBtn">✨ Nouveau chat</button>
                 <button class="header-btn" id="loginBtn">🔐 Connexion</button>
             </div>
         </div>
 
         <div class="chat-container" id="chatContainer">
-            <div class="message bot">
+            <div class="message assistant">
                 <div class="message-content">
-                    <div class="avatar bot">K</div>
+                    <div class="avatar assistant">K</div>
                     <div class="text">
-                        <strong>🔥 KENNYSON OURAGAN – Version Ultimate 🔥</strong><br><br>
-                        <strong>🚀 7 PILIERS DE PUISSANCE ACTIVÉS :</strong><br><br>
-                        ✅ <strong>P1 - MÉMOIRE PERSISTANTE</strong> : Je me souviens de toi !<br>
-                        ✅ <strong>P2 - BASE VECTORIELLE</strong> : Recherche sémantique (ChromaDB)<br>
-                        ✅ <strong>P3 - MULTI-AGENTS</strong> : Routeur intelligent<br>
-                        ✅ <strong>P4 - FEEDBACK CONTINU</strong> : 👍/👎 pour amélioration<br>
-                        ✅ <strong>P5 - CHAIN-OF-THOUGHT</strong> : Raisonnement étape par étape<br>
-                        ✅ <strong>P6 - PERSONNALISATION</strong> : Adaptation à ton style<br>
-                        ✅ <strong>P7 - 7 API GRATUITES</strong> : World Bank, CoinGecko, Open-Meteo, Wikipedia, GNews, Groq, OpenStreetMap<br><br>
-                        <strong>💡 Exemples de questions :</strong><br>
-                        • "PIB de la RDC" (World Bank)<br>
-                        • "Prix du Bitcoin" (CoinGecko)<br>
-                        • "Météo à Kinshasa" (Open-Meteo)<br>
-                        • "Définition de l'inflation" (Wikipedia)<br>
-                        • "Actualités économiques Afrique" (GNews)<br><br>
-                        <em>✨ Connecte-toi pour activer la mémoire persistante !</em>
+                        <strong>Bonjour ! Je suis KENNYSON OURAGAN.</strong><br><br>
+                        Je suis votre assistant intelligent, conçu pour vous aider avec :<br><br>
+                        📊 <strong>Économie</strong> – PIB, inflation, données Banque mondiale<br>
+                        💰 <strong>Cryptomonnaies</strong> – Prix Bitcoin, Ethereum, tendances<br>
+                        🌤️ <strong>Météo</strong> – Conditions actuelles<br>
+                        📰 <strong>Actualités</strong> – Infos économiques récentes<br>
+                        📖 <strong>Définitions</strong> – Explications claires<br><br>
+                        <strong>Comment m'utiliser ?</strong><br>
+                        Posez-moi une question directement, ou choisissez un exemple ci-dessous.<br><br>
+                        <em>✨ Je me souviens de nos conversations et m'adapte à vous !</em>
                     </div>
                 </div>
             </div>
@@ -640,59 +675,51 @@ def index():
 
         <div class="input-area">
             <div class="input-wrapper">
-                <textarea id="questionInput" rows="1" placeholder="Pose ta question... (économie, crypto, météo, définitions, actualités)"></textarea>
+                <textarea id="questionInput" rows="1" placeholder="Posez votre question..."></textarea>
                 <button class="send-btn" id="sendBtn">➤</button>
             </div>
             <div class="suggestions">
-                <div class="suggestion-chip" data-question="PIB de la RDC">🏦 PIB RDC</div>
-                <div class="suggestion-chip" data-question="Prix du Bitcoin">💰 Bitcoin</div>
-                <div class="suggestion-chip" data-question="Météo à Kinshasa">🌤️ Météo</div>
-                <div class="suggestion-chip" data-question="Définition de l'inflation">📖 Inflation</div>
-                <div class="suggestion-chip" data-question="Actualités économiques Afrique">📰 Actualités</div>
-                <div class="suggestion-chip" data-question="Compare l'économie de la RDC et du Nigeria">🌍 Comparaison</div>
+                <div class="suggestion-chip" data-question="Quel est le PIB de la RDC ?">📊 PIB de la RDC</div>
+                <div class="suggestion-chip" data-question="Quel est le prix du Bitcoin ?">💰 Prix du Bitcoin</div>
+                <div class="suggestion-chip" data-question="Quelle est la météo à Kinshasa ?">🌤️ Météo à Kinshasa</div>
+                <div class="suggestion-chip" data-question="Explique-moi l'inflation simplement">📖 Définition inflation</div>
             </div>
         </div>
-        <div class="footer">KENNYSON OURAGAN ULTIMATE · 7 piliers · Mémoire persistante · Chat (↑)</div>
+        <div class="footer">
+            KENNYSON OURAGAN · Assistant intelligent · Gratuit
+        </div>
     </div>
 
     <script>
         const chatContainer = document.getElementById('chatContainer');
         const textarea = document.getElementById('questionInput');
         const sendBtn = document.getElementById('sendBtn');
-        let currentConversationId = Date.now();
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
 
+        // Auto-resize textarea
         textarea.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 120) + 'px';
         });
 
-        async function sendMessage() {
-            const question = textarea.value.trim();
-            if (!question) return;
-            addMessage(question, 'user');
-            textarea.value = '';
-            textarea.style.height = 'auto';
-            const loadingId = addTypingIndicator();
-            try {
-                const response = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question: question })
-                });
-                const data = await response.json();
-                removeTypingIndicator(loadingId);
-                const msgId = addMessage(data.reponse, 'bot');
-                addFeedbackButtons(msgId);
-            } catch (error) {
-                removeTypingIndicator(loadingId);
-                addMessage('⚠️ Erreur technique. Veuillez réessayer.', 'bot');
-            }
-        }
+        // Menu sidebar
+        document.getElementById('menuBtn').addEventListener('click', () => {
+            sidebar.classList.add('open');
+            sidebarOverlay.classList.add('open');
+        });
+        document.getElementById('closeSidebarBtn').addEventListener('click', () => {
+            sidebar.classList.remove('open');
+            sidebarOverlay.classList.remove('open');
+        });
+        sidebarOverlay.addEventListener('click', () => {
+            sidebar.classList.remove('open');
+            sidebarOverlay.classList.remove('open');
+        });
 
+        // Fonctions
         function addMessage(text, role) {
             const messageDiv = document.createElement('div');
-            const msgId = 'msg-' + Date.now() + '-' + Math.random();
-            messageDiv.id = msgId;
             messageDiv.className = `message ${role}`;
             messageDiv.innerHTML = `
                 <div class="message-content">
@@ -702,51 +729,23 @@ def index():
             `;
             chatContainer.appendChild(messageDiv);
             scrollToBottom();
-            return msgId;
-        }
-
-        function addFeedbackButtons(msgId) {
-            const msgDiv = document.getElementById(msgId);
-            if (!msgDiv || msgDiv.querySelector('.feedback')) return;
-            const feedbackDiv = document.createElement('div');
-            feedbackDiv.className = 'feedback';
-            feedbackDiv.innerHTML = `
-                <button class="feedback-btn" onclick="sendFeedback(${currentConversationId}, 1, this)">👍</button>
-                <button class="feedback-btn" onclick="sendFeedback(${currentConversationId}, 0, this)">👎</button>
-                <span style="font-size:10px; color:#565869;">Donne ton avis</span>
-            `;
-            msgDiv.querySelector('.text').appendChild(feedbackDiv);
-        }
-
-        async function sendFeedback(convId, rating, btn) {
-            const token = localStorage.getItem('token');
-            if (!token) { alert('Connecte-toi pour donner ton avis'); return; }
-            const response = await fetch('/api/feedback', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ conversation_id: convId, rating: rating === 1 ? 5 : 1 })
-            });
-            if (response.ok) {
-                btn.parentElement.innerHTML = '<span style="color:#10a37f;">✓ Merci !</span>';
-            }
         }
 
         function formatText(text) {
             let formatted = text.replace(/\\n/g, '<br>');
-            formatted = formatted.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
             formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-            formatted = formatted.replace(/📍/g, '<strong>📍</strong>');
+            formatted = formatted.replace(/`(.*?)`/g, '<code>$1</code>');
             return formatted;
         }
 
         function addTypingIndicator() {
             const id = 'typing-' + Date.now();
             const typingDiv = document.createElement('div');
-            typingDiv.className = 'message bot';
+            typingDiv.className = 'message assistant';
             typingDiv.id = id;
             typingDiv.innerHTML = `
                 <div class="message-content">
-                    <div class="avatar bot">K</div>
+                    <div class="avatar assistant">K</div>
                     <div class="text"><div class="typing-indicator"><span></span><span></span><span></span></div></div>
                 </div>
             `;
@@ -764,6 +763,32 @@ def index():
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
+        async function sendMessage() {
+            const question = textarea.value.trim();
+            if (!question) return;
+
+            addMessage(question, 'user');
+            textarea.value = '';
+            textarea.style.height = 'auto';
+
+            const typingId = addTypingIndicator();
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: question })
+                });
+                const data = await response.json();
+                removeTypingIndicator(typingId);
+                addMessage(data.reponse, 'assistant');
+            } catch (error) {
+                removeTypingIndicator(typingId);
+                addMessage("Désolé, une erreur technique s'est produite. Veuillez réessayer.", 'assistant');
+            }
+        }
+
+        // Événements
         sendBtn.addEventListener('click', sendMessage);
         textarea.addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -779,47 +804,23 @@ def index():
             });
         });
 
-        document.getElementById('newChatBtn').addEventListener('click', () => {
+        document.getElementById('newChatTopBtn').addEventListener('click', () => {
             chatContainer.innerHTML = '';
-            currentConversationId = Date.now();
-            addMessage('✨ Nouvelle conversation. Je suis KENNYSON OURAGAN, prêt à répondre à tes questions économiques avec mes 7 piliers de puissance !', 'bot');
+            addMessage("✨ Nouvelle conversation démarrée ! Comment puis-je vous aider aujourd'hui ?", 'assistant');
         });
 
-        document.getElementById('preferencesBtn').addEventListener('click', async () => {
-            const token = localStorage.getItem('token');
-            if (!token) { alert('Connecte-toi d\'abord'); return; }
-            const niveau = prompt('Niveau (débutant/intermediaire/expert) :', 'intermediaire');
-            const style = prompt('Style (concis/détaillé) :', 'détaillé');
-            if (niveau && style) {
-                await fetch('/api/preferences', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ niveau, style })
-                });
-                alert('Préférences mises à jour !');
-            }
-        });
-
-        document.getElementById('historyBtn').addEventListener('click', async () => {
-            const token = localStorage.getItem('token');
-            if (!token) { alert('Connecte-toi d\'abord'); return; }
-            const response = await fetch('/api/history');
-            const data = await response.json();
-            if (data.length) {
-                let histText = '📜 **HISTORIQUE DES CONVERSATIONS** :\n\n';
-                data.slice(0, 5).forEach((h, i) => {
-                    histText += `${i+1}. **${h.question.substring(0, 80)}**\n   ${new Date(h.timestamp).toLocaleDateString()}\n\n`;
-                });
-                addMessage(histText, 'bot');
-            } else {
-                addMessage('Aucun historique pour le moment. Commence à discuter !', 'bot');
-            }
+        document.getElementById('newChatSidebarBtn').addEventListener('click', () => {
+            chatContainer.innerHTML = '';
+            addMessage("✨ Nouvelle conversation démarrée ! Comment puis-je vous aider aujourd'hui ?", 'assistant');
+            sidebar.classList.remove('open');
+            sidebarOverlay.classList.remove('open');
         });
 
         document.getElementById('loginBtn').addEventListener('click', () => {
             window.location.href = '/login';
         });
 
+        // Vérifier token
         const token = localStorage.getItem('token');
         if (token) {
             fetch('/api/me').then(res => {
@@ -833,7 +834,7 @@ def index():
     '''
 
 # ==================================================
-# 9. PAGES AUTHENTIFICATION
+# PAGE LOGIN
 # ==================================================
 LOGIN_PAGE = '''
 <!DOCTYPE html>
@@ -842,26 +843,31 @@ LOGIN_PAGE = '''
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KENNYSON · Connexion</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #343541; color: #ececec; height: 100vh; display: flex; align-items: center; justify-content: center; }
+        body { font-family: 'Inter', sans-serif; background: #343541; color: #ececec; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
         .login-container { background: #202123; padding: 40px; border-radius: 16px; width: 100%; max-width: 420px; }
-        h2 { margin-bottom: 8px; color: #e94560; }
-        .subtitle { font-size: 13px; color: #8e8ea0; margin-bottom: 24px; }
-        input { width: 100%; padding: 12px; margin-bottom: 12px; background: #40414f; border: none; border-radius: 8px; color: white; font-size: 14px; }
+        h2 { margin-bottom: 8px; color: #e94560; font-size: 24px; }
+        .subtitle { font-size: 13px; color: #8e8ea0; margin-bottom: 28px; }
+        input { width: 100%; padding: 12px 14px; margin-bottom: 14px; background: #40414f; border: none; border-radius: 8px; color: white; font-size: 14px; }
         input:focus { outline: none; background: #4a4b5a; }
-        button { width: 100%; padding: 12px; background: #e94560; border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer; margin-top: 8px; }
+        button { width: 100%; padding: 12px; background: #e94560; border: none; border-radius: 8px; color: white; font-weight: 500; cursor: pointer; font-size: 14px; transition: 0.2s; }
         button:hover { background: #ff5a7c; }
         .toggle { text-align: center; margin-top: 16px; font-size: 13px; color: #8e8ea0; cursor: pointer; }
         .toggle:hover { color: #e94560; }
-        .message { margin-top: 12px; text-align: center; font-size: 13px; color: #10a37f; }
+        .message { margin-top: 16px; text-align: center; font-size: 13px; }
         .error { color: #e94560; }
+        .success { color: #10a37f; }
+        .back-link { display: block; text-align: center; margin-top: 20px; color: #565869; text-decoration: none; font-size: 12px; }
+        .back-link:hover { color: #e94560; }
     </style>
 </head>
 <body>
     <div class="login-container">
         <h2>KENNYSON OURAGAN</h2>
-        <div class="subtitle">7 piliers · Mémoire persistante · 7 API</div>
+        <div class="subtitle">Assistant intelligent · Gratuit</div>
+        
         <div id="registerForm">
             <input type="text" id="regName" placeholder="Nom">
             <input type="email" id="regEmail" placeholder="Email">
@@ -869,34 +875,40 @@ LOGIN_PAGE = '''
             <button onclick="register()">Créer un compte</button>
             <div class="toggle" onclick="showLogin()">Déjà un compte ? Se connecter</div>
         </div>
+        
         <div id="loginForm" style="display:none;">
             <input type="email" id="loginEmail" placeholder="Email">
             <input type="password" id="loginPassword" placeholder="Mot de passe">
             <button onclick="login()">Se connecter</button>
             <div class="toggle" onclick="showRegister()">Pas de compte ? S'inscrire</div>
         </div>
+        
         <div id="msg" class="message"></div>
+        <a href="/" class="back-link">← Retour à l'accueil</a>
     </div>
     <script>
         function showLogin() { document.getElementById('registerForm').style.display = 'none'; document.getElementById('loginForm').style.display = 'block'; }
         function showRegister() { document.getElementById('registerForm').style.display = 'block'; document.getElementById('loginForm').style.display = 'none'; }
         async function register() {
-            let name = document.getElementById('regName').value, email = document.getElementById('regEmail').value, password = document.getElementById('regPassword').value;
+            let name = document.getElementById('regName').value;
+            let email = document.getElementById('regEmail').value;
+            let password = document.getElementById('regPassword').value;
             if (!email.includes('@')) { showMsg('Email invalide', true); return; }
             if (password.length < 6) { showMsg('Mot de passe trop court', true); return; }
             let res = await fetch('/api/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, email, password }) });
             let data = await res.json();
-            if (res.ok) { showMsg('Compte créé ! Connectez-vous.'); setTimeout(showLogin, 1500); }
+            if (res.ok) { showMsg('Compte créé ! Connectez-vous.', false); setTimeout(showLogin, 1500); }
             else { showMsg(data.error, true); }
         }
         async function login() {
-            let email = document.getElementById('loginEmail').value, password = document.getElementById('loginPassword').value;
+            let email = document.getElementById('loginEmail').value;
+            let password = document.getElementById('loginPassword').value;
             let res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
             let data = await res.json();
             if (res.ok) { localStorage.setItem('token', data.token); window.location.href = '/'; }
             else { showMsg(data.error, true); }
         }
-        function showMsg(msg, isError=false) { let div = document.getElementById('msg'); div.textContent = msg; div.className = isError ? 'message error' : 'message'; setTimeout(() => div.textContent = '', 3000); }
+        function showMsg(msg, isError) { let div = document.getElementById('msg'); div.textContent = msg; div.className = isError ? 'message error' : 'message success'; setTimeout(() => div.textContent = '', 3000); }
     </script>
 </body>
 </html>
@@ -915,16 +927,17 @@ def mon_compte():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KENNYSON · Mon compte</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #343541; color: #ececec; height: 100vh; display: flex; align-items: center; justify-content: center; }
+        body { font-family: 'Inter', sans-serif; background: #343541; color: #ececec; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
         .account-container { background: #202123; padding: 40px; border-radius: 16px; width: 100%; max-width: 420px; text-align: center; }
-        .avatar { background: linear-gradient(135deg, #e94560, #ff5a7c); width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 36px; margin: 0 auto 20px; }
-        h2 { margin-bottom: 8px; }
+        .avatar { background: linear-gradient(135deg, #e94560, #ff5a7c); width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 40px; margin: 0 auto 20px; }
+        h2 { margin-bottom: 8px; font-size: 22px; }
         .email { color: #8e8ea0; margin-bottom: 24px; }
-        button { padding: 12px 24px; background: #e94560; border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer; }
+        button { padding: 12px 24px; background: #e94560; border: none; border-radius: 8px; color: white; font-weight: 500; cursor: pointer; font-size: 14px; transition: 0.2s; }
         button:hover { background: #ff5a7c; }
-        .back-link { display: block; margin-top: 16px; color: #8e8ea0; text-decoration: none; font-size: 13px; }
+        .back-link { display: block; margin-top: 20px; color: #565869; text-decoration: none; font-size: 12px; }
         .back-link:hover { color: #e94560; }
     </style>
 </head>
@@ -936,7 +949,7 @@ def mon_compte():
         <a href="/" class="back-link">← Retour à KENNYSON</a>
     </div>
     <script>
-        async function loadUser() { let res = await fetch('/api/me'); if (res.ok) { let user = await res.json(); document.getElementById('userData').innerHTML = `<h2>${user.name}</h2><div class="email">${user.email}</div><div style="margin-top:12px; font-size:11px; color:#565869;">🧠 Mémoire active · ⚙️ Préférences sauvegardées</div>`; } else { window.location.href = '/login'; } }
+        async function loadUser() { let res = await fetch('/api/me'); if (res.ok) { let user = await res.json(); document.getElementById('userData').innerHTML = `<h2>${user.name}</h2><div class="email">${user.email}</div>`; } else { window.location.href = '/login'; } }
         async function logout() { await fetch('/api/logout', {method: 'POST'}); localStorage.removeItem('token'); window.location.href = '/'; }
         loadUser();
     </script>

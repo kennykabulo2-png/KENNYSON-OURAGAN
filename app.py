@@ -3,42 +3,31 @@ import requests
 import os
 import re
 import json
+import time
 from datetime import datetime
 
 app = Flask(__name__)
 
 # ==================================================
-# CONFIGURATION
+# CONFIGURATION API
 # ==================================================
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
+GNEWS_API_KEY = os.environ.get('GNEWS_API_KEY', '')
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-
-# ==================================================
-# GLOBALPING API (Diagnostics réseau réels)
-# ==================================================
 GLOBALPING_URL = "https://api.globalping.io/v1"
 
+# ==================================================
+# 1. GLOBALPING API (Diagnostics réseau)
+# ==================================================
 class GlobalPing:
-    """API Globalping - Diagnostics réseau en temps réel"""
-    
     @staticmethod
     def ping(host, limit=3):
-        """Exécute un ping vers une cible"""
         try:
-            payload = {
-                "target": host,
-                "type": "ping",
-                "measurementOptions": {
-                    "packets": limit,
-                    "packetSize": 56
-                }
-            }
+            payload = {"target": host, "type": "ping", "measurementOptions": {"packets": limit, "packetSize": 56}}
             headers = {"Content-Type": "application/json"}
             r = requests.post(f"{GLOBALPING_URL}/measurements", json=payload, headers=headers, timeout=30)
             if r.status_code == 202:
                 measurement_id = r.json().get('id')
-                # Attendre les résultats
-                import time
                 time.sleep(2)
                 result = requests.get(f"{GLOBALPING_URL}/measurements/{measurement_id}", timeout=30)
                 if result.status_code == 200:
@@ -49,21 +38,12 @@ class GlobalPing:
     
     @staticmethod
     def traceroute(host):
-        """Exécute un traceroute vers une cible"""
         try:
-            payload = {
-                "target": host,
-                "type": "traceroute",
-                "measurementOptions": {
-                    "protocol": "ICMP",
-                    "maxHops": 15
-                }
-            }
+            payload = {"target": host, "type": "traceroute", "measurementOptions": {"protocol": "ICMP", "maxHops": 15}}
             headers = {"Content-Type": "application/json"}
             r = requests.post(f"{GLOBALPING_URL}/measurements", json=payload, headers=headers, timeout=30)
             if r.status_code == 202:
                 measurement_id = r.json().get('id')
-                import time
                 time.sleep(3)
                 result = requests.get(f"{GLOBALPING_URL}/measurements/{measurement_id}", timeout=30)
                 if result.status_code == 200:
@@ -74,20 +54,12 @@ class GlobalPing:
     
     @staticmethod
     def dns(host, record_type="A"):
-        """Effectue une requête DNS"""
         try:
-            payload = {
-                "target": host,
-                "type": "dns",
-                "measurementOptions": {
-                    "recordType": record_type
-                }
-            }
+            payload = {"target": host, "type": "dns", "measurementOptions": {"recordType": record_type}}
             headers = {"Content-Type": "application/json"}
             r = requests.post(f"{GLOBALPING_URL}/measurements", json=payload, headers=headers, timeout=30)
             if r.status_code == 202:
                 measurement_id = r.json().get('id')
-                import time
                 time.sleep(2)
                 result = requests.get(f"{GLOBALPING_URL}/measurements/{measurement_id}", timeout=30)
                 if result.status_code == 200:
@@ -98,21 +70,12 @@ class GlobalPing:
     
     @staticmethod
     def mtr(host):
-        """Exécute un MTR (My TraceRoute)"""
         try:
-            payload = {
-                "target": host,
-                "type": "mtr",
-                "measurementOptions": {
-                    "packets": 5,
-                    "protocol": "ICMP"
-                }
-            }
+            payload = {"target": host, "type": "mtr", "measurementOptions": {"packets": 5, "protocol": "ICMP"}}
             headers = {"Content-Type": "application/json"}
             r = requests.post(f"{GLOBALPING_URL}/measurements", json=payload, headers=headers, timeout=30)
             if r.status_code == 202:
                 measurement_id = r.json().get('id')
-                import time
                 time.sleep(4)
                 result = requests.get(f"{GLOBALPING_URL}/measurements/{measurement_id}", timeout=30)
                 if result.status_code == 200:
@@ -122,123 +85,153 @@ class GlobalPing:
             return {"error": str(e)}
 
 # ==================================================
-# GATEWAY API (Qualité de service - Simulation)
+# 2. GATEWAY API (QoS - Simulation)
 # ==================================================
 class GatewayAPI:
-    """API Gateway - Gestion de la qualité de service"""
-    
     @staticmethod
     def get_network_quality(ip):
-        """Simule la qualité du réseau pour une IP"""
-        # En production, appeler une vraie API Open Gateway
-        return {
-            "ip": ip,
-            "quality": "bonne" if ip.startswith("10.") else "moyenne",
-            "latency": 25 if ip.startswith("10.") else 85,
-            "bandwidth": 100 if ip.startswith("10.") else 35,
-            "status": "stable"
-        }
+        return {"ip": ip, "quality": "bonne" if ip.startswith("10.") else "moyenne",
+                "latency": 25 if ip.startswith("10.") else 85,
+                "bandwidth": 100 if ip.startswith("10.") else 35, "status": "stable"}
     
     @staticmethod
     def request_bandwidth_boost(ip, duration=30):
-        """Demande une augmentation de bande passante"""
-        return {
-            "ip": ip,
-            "boost": "active",
-            "bandwidth_increase": "+50%",
-            "duration": f"{duration} minutes",
-            "status": "confirmed"
-        }
+        return {"ip": ip, "boost": "active", "bandwidth_increase": "+50%",
+                "duration": f"{duration} minutes", "status": "confirmed"}
     
     @staticmethod
     def get_cell_info(phone_number):
-        """Simule l'info cellule pour un numéro"""
-        return {
-            "phone": phone_number,
-            "operator": "Orange RDC",
-            "signal": "fort" if phone_number.startswith("08") else "moyen",
-            "network": "4G+",
-            "location": "Kinshasa"
-        }
+        return {"phone": phone_number, "operator": "Orange RDC",
+                "signal": "fort" if phone_number.startswith("08") else "moyen",
+                "network": "4G+", "location": "Kinshasa"}
 
 # ==================================================
-# AGENT TÉLÉCOM AVEC API RÉELLES
+# 3. GNEWS API (Actualités)
+# ==================================================
+class GNewsAPI:
+    @staticmethod
+    def get_news(query="télécommunications RDC"):
+        if not GNEWS_API_KEY:
+            return None
+        try:
+            url = f"https://gnews.io/api/v4/search?q={query}&token={GNEWS_API_KEY}&lang=fr&max=3"
+            r = requests.get(url, timeout=10)
+            if r.status_code == 200:
+                articles = r.json().get('articles', [])
+                return articles[:3]
+            return None
+        except:
+            return None
+
+# ==================================================
+# 4. BASE DE CONNAISSANCES TÉLÉCOM
+# ==================================================
+KNOWLEDGE_BASE = {
+    "latence": {"def": "Temps de transmission entre deux points (ms)", "normal": "< 50ms",
+                "causes": ["Congestion réseau", "Distance", "Interférences"],
+                "solutions": ["QoS", "Fibre optique", "Optimisation routage"]},
+    "bande_passante": {"def": "Capacité de transmission (bits/s)", "normal": "> 100 Mbps",
+                       "causes": ["Saturation", "Matériel obsolète"],
+                       "solutions": ["Augmenter débit", "Fibre optique"]},
+    "5g": {"def": "Cinquième génération réseau mobile", "debit": "Jusqu'à 10 Gbps",
+           "latence": "< 1 ms", "applications": ["IoT", "Véhicules autonomes", "Smart Cities"]},
+    "vpn": {"def": "Réseau privé virtuel", "protocoles": ["OpenVPN", "IPsec", "WireGuard"],
+            "avantages": ["Confidentialité", "Sécurité"]},
+    "firewall": {"def": "Système de sécurité réseau", "types": ["Matériel", "Logiciel"],
+                 "recommandations": ["Configurer règles", "Mettre à jour"]},
+    "wifi": {"def": "Technologie sans fil", "normes": ["802.11n", "802.11ac", "Wi-Fi 6"],
+             "problemes": ["Interférences", "Portée limitée"],
+             "solutions": ["Changer canal", "5 GHz", "Répéteurs"]},
+    "cybersecurite": {"def": "Protection des systèmes", "menaces": ["Malware", "Phishing", "DDoS", "Ransomware"],
+                      "bonnes_pratiques": ["Mots de passe forts", "MFA", "Mises à jour"]},
+    "cloud": {"def": "Services informatiques à distance", "modeles": ["IaaS", "PaaS", "SaaS"],
+              "fournisseurs": ["AWS", "Azure", "Google Cloud"]}
+}
+
+# ==================================================
+# 5. AGENT TÉLÉCOM PRINCIPAL
 # ==================================================
 class TelecomAgent:
     def __init__(self):
         self.gp = GlobalPing()
         self.gw = GatewayAPI()
+        self.gnews = GNewsAPI()
+        self.knowledge = KNOWLEDGE_BASE
     
     def process(self, question):
         q = question.lower()
         
-        # === 1. PING ===
+        # === PING ===
         ip_match = re.search(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', q)
-        if ip_match:
+        if ip_match and "ping" in q:
             ip = ip_match.group(0)
             result = self.gp.ping(ip)
             if result:
                 return self.format_ping_result(ip, result)
         
-        # === 2. TRACEROUTE ===
-        if "traceroute" in q or "trace" in q:
-            if ip_match:
-                ip = ip_match.group(0)
-                result = self.gp.traceroute(ip)
-                if result:
-                    return self.format_traceroute_result(ip, result)
+        # === TRACEROUTE ===
+        if ip_match and ("traceroute" in q or "trace" in q):
+            ip = ip_match.group(0)
+            result = self.gp.traceroute(ip)
+            if result:
+                return self.format_traceroute_result(ip, result)
         
-        # === 3. DNS ===
-        if "dns" in q or "résolution" in q:
-            domain_match = re.search(r'([a-zA-Z0-9-]+\.[a-zA-Z]{2,})', q)
+        # === DNS ===
+        if "dns" in q:
+            domain_match = re.search(r'dns\s+([a-zA-Z0-9-]+\.[a-zA-Z]{2,})', q)
             if domain_match:
                 domain = domain_match.group(1)
                 result = self.gp.dns(domain)
                 if result:
                     return self.format_dns_result(domain, result)
         
-        # === 4. MTR ===
-        if "mtr" in q:
-            if ip_match:
-                ip = ip_match.group(0)
-                result = self.gp.mtr(ip)
-                if result:
-                    return self.format_mtr_result(ip, result)
+        # === MTR ===
+        if "mtr" in q and ip_match:
+            ip = ip_match.group(0)
+            result = self.gp.mtr(ip)
+            if result:
+                return self.format_mtr_result(ip, result)
         
-        # === 5. Qualité réseau (Gateway) ===
+        # === QUALITÉ RÉSEAU ===
         if "qualité" in q or "performance" in q:
             if ip_match:
                 ip = ip_match.group(0)
                 quality = self.gw.get_network_quality(ip)
                 return self.format_quality_result(quality)
         
-        # === 6. Boost bande passante ===
-        if "boost" in q or "bande passante" in q:
-            if ip_match:
-                ip = ip_match.group(0)
-                boost = self.gw.request_bandwidth_boost(ip)
-                return self.format_boost_result(boost)
+        # === BOOST ===
+        if "boost" in q and ip_match:
+            ip = ip_match.group(0)
+            boost = self.gw.request_bandwidth_boost(ip)
+            return self.format_boost_result(boost)
         
-        # === 7. IA générale ===
+        # === ACTUALITÉS ===
+        if "actualité" in q or "news" in q:
+            news = self.gnews.get_news()
+            if news:
+                return self.format_news(news)
+        
+        # === CONNAISSANCES TÉLÉCOM ===
+        for topic in self.knowledge:
+            if topic in q:
+                return self.format_knowledge(topic)
+        
+        # === IA GÉNÉRALE ===
         return self.get_ia_response(question)
     
     def format_ping_result(self, ip, data):
         result = f"📡 **RÉSULTAT PING vers {ip}**\n\n"
         try:
             results = data.get('results', [])
-            if results:
-                for probe in results[:3]:
-                    if 'result' in probe:
-                        stats = probe['result']['stats']
-                        result += f"📍 {probe.get('probe', {}).get('country', 'N/A')}:\n"
-                        result += f"   • Min: {stats.get('min', 0):.2f} ms\n"
-                        result += f"   • Max: {stats.get('max', 0):.2f} ms\n"
-                        result += f"   • Moy: {stats.get('avg', 0):.2f} ms\n"
-                        result += f"   • Perte: {stats.get('loss', 0):.1f}%\n\n"
-            else:
-                result += "⚠️ Aucun résultat reçu"
+            for probe in results[:3]:
+                if 'result' in probe:
+                    stats = probe['result']['stats']
+                    result += f"📍 {probe.get('probe', {}).get('country', 'N/A')}:\n"
+                    result += f"   • Min: {stats.get('min', 0):.2f} ms\n"
+                    result += f"   • Moy: {stats.get('avg', 0):.2f} ms\n"
+                    result += f"   • Perte: {stats.get('loss', 0):.1f}%\n\n"
         except:
-            result += "⚠️ Erreur de parsing des résultats"
+            result += "⚠️ Erreur de parsing"
         return result
     
     def format_traceroute_result(self, ip, data):
@@ -248,12 +241,8 @@ class TelecomAgent:
             if results:
                 for probe in results[:1]:
                     if 'result' in probe:
-                        hops = probe['result']
-                        result += "Chemin IP:\n"
-                        for hop in hops[:10]:
+                        for hop in probe['result'][:8]:
                             result += f"  {hop.get('hop', '?')}. {hop.get('ip', 'N/A')} ({hop.get('rtt', 0):.2f} ms)\n"
-            else:
-                result += "⚠️ Aucun résultat reçu"
         except:
             result += "⚠️ Erreur de parsing"
         return result
@@ -265,14 +254,8 @@ class TelecomAgent:
             if results:
                 for probe in results[:1]:
                     if 'result' in probe:
-                        answers = probe['result'].get('answers', [])
-                        if answers:
-                            for ans in answers:
-                                result += f"• {ans.get('type', '')}: {ans.get('data', 'N/A')}\n"
-                        else:
-                            result += "⚠️ Aucune réponse DNS"
-            else:
-                result += "⚠️ Aucun résultat reçu"
+                        for ans in probe['result'].get('answers', []):
+                            result += f"• {ans.get('type', '')}: {ans.get('data', 'N/A')}\n"
         except:
             result += "⚠️ Erreur de parsing"
         return result
@@ -286,8 +269,6 @@ class TelecomAgent:
                     if 'result' in probe:
                         for hop in probe['result'][:8]:
                             result += f"Hop {hop.get('hop', '?')}: {hop.get('ip', 'N/A')} - {hop.get('rtt', 0):.2f} ms\n"
-            else:
-                result += "⚠️ Aucun résultat reçu"
         except:
             result += "⚠️ Erreur de parsing"
         return result
@@ -298,15 +279,35 @@ class TelecomAgent:
         result += f"📊 Qualité: {quality.get('quality', 'N/A')}\n"
         result += f"⏱️ Latence: {quality.get('latency', 0)} ms\n"
         result += f"📶 Bande passante: {quality.get('bandwidth', 0)} Mbps\n"
-        result += f"📡 Statut: {quality.get('status', 'N/A')}\n"
         return result
     
     def format_boost_result(self, boost):
-        result = "🚀 **DEMANDE DE BOOST BANDE PASSANTE**\n\n"
+        result = "🚀 **BOOST BANDE PASSANTE**\n\n"
         result += f"📍 IP: {boost.get('ip', 'N/A')}\n"
         result += f"📊 Statut: {boost.get('status', 'N/A')}\n"
         result += f"📈 Augmentation: {boost.get('bandwidth_increase', 'N/A')}\n"
         result += f"⏱️ Durée: {boost.get('duration', 'N/A')}\n"
+        return result
+    
+    def format_news(self, articles):
+        result = "📰 **ACTUALITÉS TÉLÉCOM**\n\n"
+        for article in articles:
+            result += f"• {article.get('title', 'Sans titre')}\n"
+            result += f"  📍 {article.get('source', {}).get('name', 'Source inconnue')}\n\n"
+        return result
+    
+    def format_knowledge(self, topic):
+        data = self.knowledge[topic]
+        result = f"📡 **{topic.upper()}**\n\n"
+        result += f"📖 Définition: {data.get('def', 'N/A')}\n"
+        if 'normal' in data:
+            result += f"✅ Normal: {data['normal']}\n"
+        if 'causes' in data:
+            result += f"⚠️ Causes: {', '.join(data['causes'])}\n"
+        if 'solutions' in data:
+            result += f"💡 Solutions: {', '.join(data['solutions'])}\n"
+        if 'avantages' in data:
+            result += f"🔑 Avantages: {', '.join(data['avantages'])}\n"
         return result
     
     def get_ia_response(self, question):
@@ -316,14 +317,11 @@ class TelecomAgent:
         headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
         payload = {
             "model": "llama-3.3-70b-versatile",
-            "messages": [
-                {"role": "system", "content": "Tu es KENNYSON OURAGAN, expert télécom avec accès aux API Globalping et Gateway."},
-                {"role": "user", "content": question}
-            ],
+            "messages": [{"role": "system", "content": "Tu es KENNYSON OURAGAN, expert en télécommunications."},
+                         {"role": "user", "content": question}],
             "temperature": 0.7,
             "max_tokens": 500
         }
-        
         try:
             r = requests.post(GROQ_URL, json=payload, headers=headers, timeout=30)
             if r.status_code == 200:
@@ -333,28 +331,30 @@ class TelecomAgent:
         return self.get_help_message()
     
     def get_help_message(self):
-        return """📡 **KENNYSON OURAGAN - AGENT TÉLÉCOM** 
+        return """📡 **KENNYSON OURAGAN - AGENT TÉLÉCOM**
 
-**🔍 Commandes réseau disponibles :**
+**🔍 Commandes disponibles :**
 
-📊 **Ping** → "ping 8.8.8.8"
-🔍 **Traceroute** → "traceroute 8.8.8.8"
-🌐 **DNS** → "dns google.com"
-📈 **MTR** → "mtr 8.8.8.8"
-📶 **Qualité** → "qualité réseau 192.168.1.1"
-🚀 **Boost** → "boost bande passante 192.168.1.1"
+📊 **ping 8.8.8.8** → Test de connectivité
+🔍 **traceroute google.com** → Chemin réseau
+🌐 **dns facebook.com** → Résolution DNS
+📈 **mtr 8.8.8.8** → Analyse détaillée
+📶 **qualité réseau 10.0.0.1** → Performance
+🚀 **boost 10.0.0.1** → Augmente débit
+📰 **actualités télécom** → Dernières nouvelles
+📡 **latence** → Explication concept
 
 **💡 Exemples :**
-• "ping 8.8.8.8" - Teste la connectivité
-• "traceroute google.com" - Chemin réseau
-• "dns facebook.com" - Résolution DNS
-• "qualité réseau 10.0.0.1" - Performance
-• "boost 10.0.0.1" - Augmente débit
+• "ping 8.8.8.8"
+• "traceroute google.com"
+• "actualités télécom RDC"
+• "qu'est-ce que la latence ?"
+• "boost 10.0.0.1"
 
 **Posez votre commande !** 🔥"""
 
 # ==================================================
-# ROUTES
+# ROUTES API
 # ==================================================
 agent = TelecomAgent()
 
@@ -367,10 +367,10 @@ def chat():
 
 @app.route('/api/health')
 def health():
-    return jsonify({"status": "online"})
+    return jsonify({"status": "online", "groq": bool(GROQ_API_KEY), "gnews": bool(GNEWS_API_KEY)})
 
 # ==================================================
-# INTERFACE
+# INTERFACE HTML
 # ==================================================
 HTML = '''
 <!DOCTYPE html>
@@ -407,8 +407,8 @@ HTML = '''
 </head>
 <body>
 <div class="header">
-    <div class="logo">📡 KENNYSON OURAGAN <span class="badge">API RÉSEAU</span></div>
-    <div class="sub">Globalping · Gateway · Diagnostics en temps réel</div>
+    <div class="logo">📡 KENNYSON OURAGAN <span class="badge">MULTI-API</span></div>
+    <div class="sub">Globalping · Gateway · GNews · Groq · Base connaissances</div>
 </div>
 <div class="chat-container" id="chat"></div>
 <div class="input-area">
@@ -420,10 +420,11 @@ HTML = '''
         <div class="suggestion" data-q="ping 8.8.8.8">📊 Ping</div>
         <div class="suggestion" data-q="traceroute google.com">🔍 Traceroute</div>
         <div class="suggestion" data-q="dns facebook.com">🌐 DNS</div>
-        <div class="suggestion" data-q="mtr 8.8.8.8">📈 MTR</div>
-        <div class="suggestion" data-q="qualité réseau 10.0.0.1">📶 Qualité</div>
+        <div class="suggestion" data-q="actualités télécom RDC">📰 Actualités</div>
+        <div class="suggestion" data-q="qu'est-ce que la latence ?">📡 Latence</div>
+        <div class="suggestion" data-q="boost 10.0.0.1">🚀 Boost</div>
     </div>
-    <div class="footer">📡 Agent Télécom · Globalping · Gateway · Diagnostics temps réel</div>
+    <div class="footer">📡 5 API intégrées · Diagnostics temps réel · Base connaissances</div>
 </div>
 
 <script>
@@ -459,7 +460,7 @@ document.getElementById('send').onclick = send;
 input.onkeypress = (e) => { if(e.key === 'Enter') { e.preventDefault(); send(); } };
 document.querySelectorAll('.suggestion').forEach(s => { s.onclick = () => { input.value = s.dataset.q; send(); }; });
 
-addMessage('📡 **KENNYSON OURAGAN - AGENT TÉLÉCOM**\n\nBonjour ! Je suis votre expert réseau avec **API réelles**.\n\n**🔍 Commandes disponibles :**\n• 📊 **ping 8.8.8.8** - Test de connectivité\n• 🔍 **traceroute google.com** - Chemin réseau\n• 🌐 **dns facebook.com** - Résolution DNS\n• 📈 **mtr 8.8.8.8** - Analyse détaillée\n• 📶 **qualité réseau 10.0.0.1** - Performance\n\n**Exécutez vos commandes réseau !** 🔥', 'bot');
+addMessage('📡 **KENNYSON OURAGAN - AGENT TÉLÉCOM MULTI-API**\n\nBonjour ! Je suis votre expert réseau avec **5 API intégrées**.\n\n**🔍 Commandes disponibles :**\n• 📊 **ping 8.8.8.8** - Test de connectivité\n• 🔍 **traceroute google.com** - Chemin réseau\n• 🌐 **dns facebook.com** - Résolution DNS\n• 📰 **actualités télécom** - Dernières nouvelles\n• 📡 **latence** - Explication concept\n• 🚀 **boost 10.0.0.1** - Augmentation débit\n\n**Exécutez vos commandes réseau !** 🔥', 'bot');
 </script>
 </body>
 </html>

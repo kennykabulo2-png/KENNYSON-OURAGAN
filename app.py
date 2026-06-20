@@ -9,10 +9,11 @@ from datetime import datetime
 app = Flask(__name__)
 
 # ==================================================
-# CONFIGURATION API
+# CONFIGURATION API - LECTURE DEPUIS L'ENVIRONNEMENT
 # ==================================================
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
 GNEWS_API_KEY = os.environ.get('GNEWS_API_KEY', '')
+
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GLOBALPING_URL = "https://api.globalping.io/v1"
 
@@ -98,12 +99,6 @@ class GatewayAPI:
     def request_bandwidth_boost(ip, duration=30):
         return {"ip": ip, "boost": "active", "bandwidth_increase": "+50%",
                 "duration": f"{duration} minutes", "status": "confirmed"}
-    
-    @staticmethod
-    def get_cell_info(phone_number):
-        return {"phone": phone_number, "operator": "Orange RDC",
-                "signal": "fort" if phone_number.startswith("08") else "moyen",
-                "network": "4G+", "location": "Kinshasa"}
 
 # ==================================================
 # 3. GNEWS API (Actualités)
@@ -112,13 +107,13 @@ class GNewsAPI:
     @staticmethod
     def get_news(query="télécommunications RDC"):
         if not GNEWS_API_KEY:
-            return None
+            return "🔑 Clé GNews manquante. Ajoute GNEWS_API_KEY dans les variables d'environnement."
         try:
             url = f"https://gnews.io/api/v4/search?q={query}&token={GNEWS_API_KEY}&lang=fr&max=3"
             r = requests.get(url, timeout=10)
             if r.status_code == 200:
                 articles = r.json().get('articles', [])
-                return articles[:3]
+                return articles[:3] if articles else "Aucune actualité récente."
             return None
         except:
             return None
@@ -290,7 +285,11 @@ class TelecomAgent:
         return result
     
     def format_news(self, articles):
+        if isinstance(articles, str):
+            return f"📰 {articles}"
         result = "📰 **ACTUALITÉS TÉLÉCOM**\n\n"
+        if not articles:
+            return "📰 Aucune actualité récente."
         for article in articles:
             result += f"• {article.get('title', 'Sans titre')}\n"
             result += f"  📍 {article.get('source', {}).get('name', 'Source inconnue')}\n\n"
@@ -306,13 +305,11 @@ class TelecomAgent:
             result += f"⚠️ Causes: {', '.join(data['causes'])}\n"
         if 'solutions' in data:
             result += f"💡 Solutions: {', '.join(data['solutions'])}\n"
-        if 'avantages' in data:
-            result += f"🔑 Avantages: {', '.join(data['avantages'])}\n"
         return result
     
     def get_ia_response(self, question):
         if not GROQ_API_KEY:
-            return self.get_help_message()
+            return "🔑 **Clé Groq manquante**\n\nAjoute GROQ_API_KEY dans les variables d'environnement Render ou relance le conteneur avec -e GROQ_API_KEY=ta_clé"
         
         headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
         payload = {
@@ -349,7 +346,6 @@ class TelecomAgent:
 • "traceroute google.com"
 • "actualités télécom RDC"
 • "qu'est-ce que la latence ?"
-• "boost 10.0.0.1"
 
 **Posez votre commande !** 🔥"""
 
@@ -367,7 +363,11 @@ def chat():
 
 @app.route('/api/health')
 def health():
-    return jsonify({"status": "online", "groq": bool(GROQ_API_KEY), "gnews": bool(GNEWS_API_KEY)})
+    return jsonify({
+        "status": "online",
+        "groq": bool(GROQ_API_KEY),
+        "gnews": bool(GNEWS_API_KEY)
+    })
 
 # ==================================================
 # INTERFACE HTML
@@ -407,8 +407,8 @@ HTML = '''
 </head>
 <body>
 <div class="header">
-    <div class="logo">📡 KENNYSON OURAGAN <span class="badge">MULTI-API</span></div>
-    <div class="sub">Globalping · Gateway · GNews · Groq · Base connaissances</div>
+    <div class="logo">📡 KENNYSON OURAGAN <span class="badge">SÉCURISÉ</span></div>
+    <div class="sub">Clés API en variables d'environnement</div>
 </div>
 <div class="chat-container" id="chat"></div>
 <div class="input-area">
@@ -422,9 +422,8 @@ HTML = '''
         <div class="suggestion" data-q="dns facebook.com">🌐 DNS</div>
         <div class="suggestion" data-q="actualités télécom RDC">📰 Actualités</div>
         <div class="suggestion" data-q="qu'est-ce que la latence ?">📡 Latence</div>
-        <div class="suggestion" data-q="boost 10.0.0.1">🚀 Boost</div>
     </div>
-    <div class="footer">📡 5 API intégrées · Diagnostics temps réel · Base connaissances</div>
+    <div class="footer">📡 Clés API sécurisées · Variables d'environnement</div>
 </div>
 
 <script>
@@ -460,7 +459,7 @@ document.getElementById('send').onclick = send;
 input.onkeypress = (e) => { if(e.key === 'Enter') { e.preventDefault(); send(); } };
 document.querySelectorAll('.suggestion').forEach(s => { s.onclick = () => { input.value = s.dataset.q; send(); }; });
 
-addMessage('📡 **KENNYSON OURAGAN - AGENT TÉLÉCOM MULTI-API**\n\nBonjour ! Je suis votre expert réseau avec **5 API intégrées**.\n\n**🔍 Commandes disponibles :**\n• 📊 **ping 8.8.8.8** - Test de connectivité\n• 🔍 **traceroute google.com** - Chemin réseau\n• 🌐 **dns facebook.com** - Résolution DNS\n• 📰 **actualités télécom** - Dernières nouvelles\n• 📡 **latence** - Explication concept\n• 🚀 **boost 10.0.0.1** - Augmentation débit\n\n**Exécutez vos commandes réseau !** 🔥', 'bot');
+addMessage('📡 **KENNYSON OURAGAN - AGENT TÉLÉCOM SÉCURISÉ**\n\nBonjour ! Je suis votre expert réseau.\n\n**🔍 Commandes disponibles :**\n• 📊 **ping 8.8.8.8** - Test de connectivité\n• 🔍 **traceroute google.com** - Chemin réseau\n• 🌐 **dns facebook.com** - Résolution DNS\n• 📰 **actualités télécom** - Dernières nouvelles\n• 📡 **latence** - Explication concept\n\n**Les clés API sont sécurisées dans l\'environnement.**', 'bot');
 </script>
 </body>
 </html>
